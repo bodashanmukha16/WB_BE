@@ -17,10 +17,9 @@ app.listen(process.env.PORT, ()=>{
 });
 app.get("/health", async (req, res) => {
   try {
-    await pool.query("SELECT 1");
-    res.status(200).json({ status: "DB Connected" });
+    res.status(200).json({ status: "ServerRunning"})
   } catch (err) {
-    res.status(500).json({ status: "DB Error", error: err.message });
+    res.status(500).json({ status: "Not Running"})
   }
 });
 
