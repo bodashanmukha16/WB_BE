@@ -1,0 +1,136 @@
+name: Deploy to Render and Wait
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      # 🔥 Trigger Render Deploy
+      - name: Trigger Render Deploy
+        run: |
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
+
+      # 🔥 Wait for Deployment
+      - name: Wait for Render Deployment
+        id: wait_deploy
+        run: |
+          echo "Waiting for Render deployment..."
+          START=$(date +%s)
+
+          for i in {1..30}
+          do
+            STATUS=$(curl -s \
+              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys \
+              | jq -r '.[0].deploy.status')
+
+            echo "Current status: $STATUS"
+
+            if [ "$STATUS" == "live" ]; then
+              END=$(date +%s)
+              echo "DEPLOY_TIME=$((END-START))" >> $GITHUB_ENV
+              exit 0
+            fi
+
+            if [ "$STATUS" == "build_failed" ] || [ "$STATUS" == "deploy_failed" ]; then
+              exit 1
+            fi
+
+            sleep 20
+          done
+
+          exit 1
+
+      # ✅ SUCCESS EMAIL
+      - name: Send Success Email
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: false
+          username: "workbench.portal@gmail.com"
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "🚀 WB_BE Deployment Successful"
+          to: ${{ github.event.head_commit.author.email }}
+          from: "workbench.portal@gmail.com"
+          html_body: |
+            <div style="font-family: Arial, sans-serif; background:#f3f4f6; padding:30px;">
+              <div style="max-width:650px; margin:auto; background:#ffffff; border-radius:10px; padding:25px;">
+                
+                <div style="text-align:center; margin-bottom:20px;">
+                  <img src="https://img.freepik.com/free-vector/digital-book-logo-vector-template_361591-3092.jpg" width="150"/>
+                </div>
+
+                <h2 style="color:#16a34a; text-align:center;">🚀 Deployment Successful</h2>
+                <p>Hello ${{ github.event.head_commit.author.name }},</p>
+
+                <table style="width:100%;">
+                  <tr><td><strong>Status:</strong></td><td style="color:#16a34a;">LIVE ✅</td></tr>
+                  <tr><td><strong>Branch:</strong></td><td>${{ github.ref_name }}</td></tr>
+                  <tr><td><strong>Commit:</strong></td><td>${{ github.sha }}</td></tr>
+                  <tr><td><strong>Message:</strong></td><td>${{ github.event.head_commit.message }}</td></tr>
+                  <tr><td><strong>Deployment Time:</strong></td><td>${{ env.DEPLOY_TIME }} sec</td></tr>
+                </table>
+
+                <br/>
+
+                <div style="text-align:center;">
+                  <a href="https://wb-be-lc6x.onrender.com/health"
+                     style="background:#2563eb; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">
+                     🌍 View Live Server Status
+                  </a>
+                </div>
+
+              </div>
+            </div>
+
+      # ❌ FAILURE EMAIL
+      - name: Send Failure Email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: false
+          username: "workbench.portal@gmail.com"
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "❌ WB_FE Deployment Failed"
+          to: ${{ github.event.head_commit.author.email }}
+          from: "workbench.portal@gmail.com"
+          html_body: |
+            <div style="font-family: Arial, sans-serif; background:#f3f4f6; padding:30px;">
+              <div style="max-width:650px; margin:auto; background:#ffffff; border-radius:10px; padding:25px;">
+
+                <div style="text-align:center; margin-bottom:20px;">
+                  <img src="https://img.freepik.com/free-vector/digital-book-logo-vector-template_361591-3092.jpg" width="150"/>
+                </div>
+
+                <h2 style="color:#dc2626; text-align:center;">❌ Deployment Failed</h2>
+                <p>Hello ${{ github.event.head_commit.author.name }},</p>
+
+                <table style="width:100%;">
+                  <tr><td><strong>Branch:</strong></td><td>${{ github.ref_name }}</td></tr>
+                  <tr><td><strong>Commit:</strong></td><td>${{ github.sha }}</td></tr>
+                  <tr><td><strong>Message:</strong></td><td>${{ github.event.head_commit.message }}</td></tr>
+                </table>
+
+                <br/>
+
+                <div style="text-align:center;">
+                  <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                     style="background:#dc2626; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">
+                     🔎 View Logs
+                  </a>
+                </div>
+
+              </div>
+            </div>
