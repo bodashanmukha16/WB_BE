@@ -67,7 +67,7 @@ jobs:
               <div style="max-width:650px; margin:auto; background:#ffffff; border-radius:10px; padding:25px;">
                 
                 <div style="text-align:center; margin-bottom:20px;">
-                  <img src="https://img.freepik.com/free-vector/digital-book-logo-vector-template_361591-3092.jpg" width="150"/>
+                  <img src="https://res.cloudinary.com/dja3u3qwa/image/upload/v1771704478/logo_new_grbbdt.png" width="150"/>
                 </div>
 
                 <h2 style="color:#16a34a; text-align:center;">🚀 Deployment Successful</h2>
@@ -111,7 +111,7 @@ jobs:
               <div style="max-width:650px; margin:auto; background:#ffffff; border-radius:10px; padding:25px;">
 
                 <div style="text-align:center; margin-bottom:20px;">
-                  <img src="https://img.freepik.com/free-vector/digital-book-logo-vector-template_361591-3092.jpg" width="150"/>
+                  <img src="https://res.cloudinary.com/dja3u3qwa/image/upload/v1771704478/logo_new_grbbdt.png" width="150"/>
                 </div>
 
                 <h2 style="color:#dc2626; text-align:center;">❌ Deployment Failed</h2>
