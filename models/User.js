@@ -5,6 +5,7 @@ const userSchema = new mongoose.Schema({
   email: String,
   password: String,
   fullname: String,
+  branch: String,
   role: {
     type: String,
     default: "student"
