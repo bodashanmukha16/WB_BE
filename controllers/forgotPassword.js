@@ -136,7 +136,7 @@ Designed for Students. Built for Success.
     from: process.env.EMAIL,
     to: user.email,
     subject: "Password Reset Request",
-    html:emailTemplate(resetLink, user.username)
+    html:emailTemplate(resetLink, user.fullname)
   });
 
   res.json({ message: "Reset link sent to email" });
