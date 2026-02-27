@@ -4,12 +4,13 @@ const userSchema = new mongoose.Schema({
   username: String,
   email: String,
   password: String,
-  fullname: String,
-  branch: String,
   role: {
     type: String,
     default: "student"
-  }
+  },
+
+  resetToken: String,
+  resetTokenExpiry: Date
 });
 
 // 👇 force collection name
