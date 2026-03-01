@@ -4,7 +4,8 @@ import nodemailer from "nodemailer";
 
 export const forgotPassword = async (req, res) => {
   const { email } = req.body;
-
+console.log("EMAIL:", process.env.EMAIL);
+console.log("PASS exists:", !!process.env.EMAIL_PASS);
   // email  Template here
   const emailTemplate = (resetLink, username) => `
 <!DOCTYPE html>
