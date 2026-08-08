@@ -116,7 +116,7 @@ Designed for Students. Built for Success.
   user.resetTokenExpiry = Date.now() + 15 * 60 * 1000; // 15 mins
   await user.save();
 
-  const resetLink = `https://wb-fe.onrender.com/reset-password/${resetToken}`;
+  const resetLink = `http://localhost:5000/reset-password/${resetToken}`;
 
   // Send email
  const transporter = nodemailer.createTransport({

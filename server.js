@@ -3,6 +3,7 @@ import express from "express"
 import cors from "cors"
 import dotenv from "dotenv"
 import authRoutes from './routes/authRoutes.js'
+import enrollmentRoutes from './routes/enrollmentRoutes.js'
 import connectDB from './config/db.js';
 dotenv.config();
 
@@ -11,6 +12,7 @@ app.use(cors())
 app.use(express.json())
 connectDB(); // connect to Mongo
 app.use("/api/auth",authRoutes)
+app.use("/api/enrollments", enrollmentRoutes)
 
 app.listen(process.env.PORT, ()=>{
     console.log(`Server Running on port ${process.env.PORT}`)
