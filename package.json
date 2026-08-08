@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon server.js",
-    "init:enrollments": "node scripts/initEnrollmentsDB.js"
+    "init:enrollments": "node scripts/initEnrollmentsDB.js",
+    "init:orgs": "node scripts/initOrgDatabases.js"
   },
   "keywords": [],
   "author": "",

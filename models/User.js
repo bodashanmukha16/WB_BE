@@ -1,21 +1,47 @@
 import mongoose from "mongoose";
 
-const userSchema = new mongoose.Schema({
-  username: String,
-  email: String,
-  password: String,
-  branch: String,
-  fullname:String,
-  role: {
-    type: String,
-    default: "student"
+const userSchema = new mongoose.Schema(
+  {
+    username: {
+      type: String,
+      required: true,
+      index: true
+    },
+    email: {
+      type: String,
+      required: true,
+      index: true
+    },
+    password: {
+      type: String,
+      required: true
+    },
+    branch: String,
+    fullname: String,
+    orgId: {
+      type: String,
+      default: "jntuk",
+      lowercase: true,
+      trim: true,
+      index: true
+    },
+    organization: {
+      type: String,
+      default: "JNTUK College of Engineering"
+    },
+    role: {
+      type: String,
+      default: "student"
+    },
+    resetToken: String,
+    resetTokenExpiry: Date
   },
+  {
+    timestamps: true
+  }
+);
 
-  resetToken: String,
-  resetTokenExpiry: Date
-});
-
-// 👇 force collection name
-const User = mongoose.model("User", userSchema, "stu_database")
+// Force collection name for User model
+const User = mongoose.model("User", userSchema, "stu_database");
 
 export default User;

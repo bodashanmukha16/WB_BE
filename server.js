@@ -5,12 +5,17 @@ import dotenv from "dotenv"
 import authRoutes from './routes/authRoutes.js'
 import enrollmentRoutes from './routes/enrollmentRoutes.js'
 import connectDB from './config/db.js';
+import { tenantMiddleware } from './middleware/tenantMiddleware.js';
 dotenv.config();
 
 const app = express();
 app.use(cors())
 app.use(express.json())
 connectDB(); // connect to Mongo
+
+// Mount Enterprise Multi-Tenant Middleware globally
+app.use(tenantMiddleware);
+
 app.use("/api/auth",authRoutes)
 app.use("/api/enrollments", enrollmentRoutes)
 
