@@ -322,52 +322,7 @@ const initDatabases = async () => {
       }
     }
 
-    // 2. Seed Sample Results into Branch Collections inside each Organization's DB ('wb_org_[orgId]')
-    const sampleSubmissions = [
-      {
-        examId: "sample_exam_cse",
-        examTitle: "Computer Science Benchmark Test",
-        userId: "19KH1A0512",
-        studentEmail: "student.cse@svck.edu",
-        studentName: "Shanmukha (CSE)",
-        branch: "cse",
-        orgId: "svck",
-        score: 18,
-        totalMarks: 20,
-        percentage: 90,
-        grade: "S (Outstanding)",
-        passed: true,
-        violationsCount: 0,
-        timeSpentSeconds: 900
-      },
-      {
-        examId: "sample_exam_ece",
-        examTitle: "Embedded Systems & Signal Processing",
-        userId: "23A91A0401",
-        studentEmail: "student.ece@aits.edu",
-        studentName: "Rahul (ECE)",
-        branch: "ece",
-        orgId: "aits",
-        score: 16,
-        totalMarks: 20,
-        percentage: 80,
-        grade: "A+ (Excellent)",
-        passed: true,
-        violationsCount: 1,
-        timeSpentSeconds: 1100
-      }
-    ];
-
-    for (const sub of sampleSubmissions) {
-      const tenantCtx = getTenantContext(sub.orgId);
-      const cleanBranch = resolveStudentBranch(sub.branch);
-      const BranchModel = tenantCtx.models.getBranchResultsModel(cleanBranch);
-
-      const doc = new BranchModel({ ...sub, branch: cleanBranch });
-      await doc.save();
-    }
-
-    console.log("\n🎉 Database Synchronization Complete!");
+    console.log("\n🎉 All Organization Exam & Questions Collections Synchronized!");
     process.exit(0);
   } catch (error) {
     console.error("❌ Error initializing exam databases:", error);
