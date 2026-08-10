@@ -8,6 +8,7 @@
     "start": "nodemon server.js",
     "init:enrollments": "node scripts/initEnrollmentsDB.js",
     "init:orgs": "node scripts/initOrgDatabases.js",
+    "init:exams": "node scripts/initExamDatabases.js",
     "onboard": "node scripts/onboardOrganization.js"
   },
   "keywords": [],
