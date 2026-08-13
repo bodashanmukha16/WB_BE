@@ -40,13 +40,18 @@ export const getTenantContext = (tenantId = "default") => {
   const tenantDb = baseConn.useDb(dbName, { useCache: true });
 
   // 1. User Schema & Model ('stu_database')
-  const userSchema = mongoose.models.User?.schema || new mongoose.Schema({
-    username: String,
-    email: String,
-    password: String,
-    branch: String,
+  const userSchema = new mongoose.Schema({
+    username: { type: String, required: true },
+    email: { type: String, required: true },
+    password: { type: String, required: true },
     fullname: String,
-    role: { type: String, default: "student" }
+    branch: { type: String, required: true }, // e.g. "CSE"
+    year: { type: Number, required: true }, // e.g. 1, 2, 3, 4
+    semester: { type: Number, default: 1 }, // e.g. 1, 2
+    section: { type: String, default: "A" }, // e.g. "A"
+    role: { type: String, default: "student" },
+    orgId: String,
+    createdAt: { type: Date, default: Date.now }
   });
 
   // 2. Course Enrollment Schema & Model ('course_enrollments')
@@ -114,11 +119,64 @@ export const getTenantContext = (tenantId = "default") => {
     submittedAt: { type: Date, default: Date.now }
   });
 
+  // 6. Dedicated College Subjects Schema & Model ('college_subjects')
+  const subjectSchema = new mongoose.Schema({
+    subjectCode: { type: String, required: true },
+    subjectName: { type: String, required: true },
+    department: { type: String, required: true }, // cse, ece, eee, mech, civil
+    year: { type: Number, required: true }, // 1, 2, 3, 4
+    semester: { type: Number, default: 1 }, // 1, 2
+    type: { type: String, default: "Theory" }, // Theory, Lab / Practical
+    credits: { type: Number, default: 3 },
+    orgId: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now }
+  });
+
+  // 7. Staff Database Schema & Model ('staff_database')
+  const staffSchema = mongoose.models.StaffUser?.schema || new mongoose.Schema({
+    staffId: { type: String, required: true },
+    fullname: { type: String, required: true },
+    email: { type: String, required: true },
+    password: { type: String, required: true },
+    role: { type: String, default: "lecturer" },
+    department: { type: String, default: "all" },
+    phone: String,
+    assignedSubjects: Array,
+    orgId: { type: String, default: cleanTenantId }
+  });
+
+  // 8. Attendance Schema & Model ('attendance_records')
+  const attendanceSchema = new mongoose.Schema({
+    orgId: { type: String, default: cleanTenantId },
+    department: { type: String, required: true },
+    year: { type: Number, required: true },
+    semester: { type: Number, default: 1 },
+    section: { type: String, default: "A" },
+    subjectCode: { type: String, required: true },
+    subjectName: { type: String, required: true },
+    facultyId: { type: String, required: true },
+    facultyName: { type: String, required: true },
+    date: { type: String, required: true },
+    periods: { type: [Number], default: [1] },
+    records: [
+      {
+        studentId: String,
+        rollNumber: String,
+        studentName: String,
+        status: { type: String, default: "present" }
+      }
+    ],
+    createdAt: { type: Date, default: Date.now }
+  });
+
   const TenantUser = tenantDb.model("User", userSchema, "stu_database");
   const TenantCourseEnrollment = tenantDb.model("CourseEnrollment", courseEnrollmentSchema, "course_enrollments");
   const TenantExam = tenantDb.model("Exam", examSchema, "org_exams");
   const TenantExamQuestion = tenantDb.model("ExamQuestion", examQuestionSchema, "exam_questions");
   const TenantExamSubmission = tenantDb.model("ExamSubmission", examSubmissionSchema, "exam_submissions");
+  const TenantSubject = tenantDb.model("Subject", subjectSchema, "college_subjects");
+  const TenantStaffUser = tenantDb.model("StaffUser", staffSchema, "staff_database");
+  const TenantAttendance = tenantDb.model("Attendance", attendanceSchema, "attendance_records");
 
   /**
    * Returns a branch-specific results collection model inside current Organization DB (wb_org_[orgId])
@@ -148,6 +206,9 @@ export const getTenantContext = (tenantId = "default") => {
       Exam: TenantExam,
       ExamQuestion: TenantExamQuestion,
       ExamSubmission: TenantExamSubmission,
+      Subject: TenantSubject,
+      StaffUser: TenantStaffUser,
+      Attendance: TenantAttendance,
       getBranchResultsModel
     }
   };

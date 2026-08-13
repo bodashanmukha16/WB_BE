@@ -5,6 +5,7 @@ import dotenv from "dotenv"
 import authRoutes from './routes/authRoutes.js'
 import enrollmentRoutes from './routes/enrollmentRoutes.js'
 import examRoutes from './routes/examRoutes.js'
+import adminRoutes from './Admin_Backend/routes/adminRoutes.js'
 import connectDB from './config/db.js';
 import { tenantMiddleware } from './middleware/tenantMiddleware.js';
 dotenv.config();
@@ -20,6 +21,7 @@ app.use(tenantMiddleware);
 app.use("/api/auth",authRoutes)
 app.use("/api/enrollments", enrollmentRoutes)
 app.use("/api/exams", examRoutes)
+app.use("/api/admin", adminRoutes)
 
 
 app.listen(process.env.PORT, ()=>{
