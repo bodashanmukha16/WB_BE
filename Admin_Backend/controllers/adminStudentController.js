@@ -12,7 +12,7 @@ const getTenantUserModel = (req) => {
   return getTenantContext(orgId).models.User;
 };
 
-// Fetch All Students (from active Organization database wb_org_[orgId])
+// Fetch All Students (Enforcing HOD / Lecturer Department Scoping)
 export const getAllStudents = async (req, res) => {
   try {
     const { department, year, section, search } = req.query;
@@ -20,8 +20,24 @@ export const getAllStudents = async (req, res) => {
 
     const filter = { role: "student" };
 
-    if (department && department !== "all") {
-      filter.branch = new RegExp(department, "i");
+    let targetDept = department;
+    const staffRole = req.staffUser?.role || req.user?.role;
+    const staffDept = req.staffUser?.department || req.user?.department;
+
+    if ((staffRole === "hod" || staffRole === "lecturer") && staffDept && staffDept !== "all") {
+      targetDept = staffDept;
+    }
+
+    if (targetDept && targetDept !== "all") {
+      filter.branch = new RegExp(`^${targetDept.trim()}$`, "i");
+    }
+
+    if (year) {
+      filter.year = Number(year);
+    }
+
+    if (section && section !== "all") {
+      filter.section = section;
     }
 
     if (search) {
@@ -46,6 +62,7 @@ export const getAllStudents = async (req, res) => {
         branch: s.branch || "CSE",
         department: (s.branch || "CSE").toUpperCase(),
         year: s.year || 3,
+        semester: s.semester || 1,
         section: s.section || "A",
         orgId: s.orgId || req.tenantId || "jntuk",
         createdAt: s.createdAt
@@ -60,7 +77,7 @@ export const getAllStudents = async (req, res) => {
 // Create Student Record in active Organization Database
 export const createStudent = async (req, res) => {
   try {
-    const { rollNumber, fullname, email, password, branch, year, section } = req.body;
+    const { rollNumber, fullname, email, password, branch, year, semester, section } = req.body;
     const TenantUser = getTenantUserModel(req);
     const orgId = req.tenantId || "jntuk";
 
@@ -82,7 +99,8 @@ export const createStudent = async (req, res) => {
       email: email.toLowerCase(),
       password: password || "Student@123",
       branch: branch || "CSE",
-      year: year || 3,
+      year: Number(year || 3),
+      semester: Number(semester || 1),
       section: section || "A",
       role: "student",
       orgId
@@ -101,6 +119,7 @@ export const createStudent = async (req, res) => {
         branch: newStudent.branch,
         department: (newStudent.branch || "CSE").toUpperCase(),
         year: newStudent.year,
+        semester: newStudent.semester,
         section: newStudent.section,
         orgId
       }
@@ -115,12 +134,12 @@ export const createStudent = async (req, res) => {
 export const updateStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { fullname, email, branch, year, section } = req.body;
+    const { fullname, email, branch, year, semester, section } = req.body;
     const TenantUser = getTenantUserModel(req);
 
     const updated = await TenantUser.findByIdAndUpdate(
       id,
-      { fullname, email, branch, year, section },
+      { fullname, email, branch, year, semester, section },
       { new: true }
     ).select("-password");
 
@@ -165,7 +184,6 @@ export const getCollegeAnalytics = async (req, res) => {
 
     const totalStudents = await TenantUser.countDocuments({ role: "student" });
     const totalStaff = await StaffUser.countDocuments({ $or: [{ orgId }, { department: "all" }] });
-    const totalAttendanceLogs = await Attendance.countDocuments({ orgId });
 
     const depts = ["cse", "ece", "eee", "mech", "civil"];
     const deptBreakdown = {};
