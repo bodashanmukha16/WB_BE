@@ -1,9 +1,10 @@
 import jwt from "jsonwebtoken";
 import { getTenantContext } from "../utils/tenantConnectionManager.js";
 import { resolveOrgFromRollNumber } from "../utils/rollNumberResolver.js";
+import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
 
 /**
- * Express middleware to identify college organization dynamically.
+ * Express middleware to identify college organization dynamically and enforce validity.
  * Priority:
  * 1. Explicit request header `x-tenant-id` (Highest Priority)
  * 2. Decoded JWT bearer token claims
@@ -11,8 +12,13 @@ import { resolveOrgFromRollNumber } from "../utils/rollNumberResolver.js";
  * 4. Roll number in request URL path (only if valid roll number format)
  * 5. Default fallback
  */
-export const tenantMiddleware = (req, res, next) => {
+export const tenantMiddleware = async (req, res, next) => {
   try {
+    // Skip validity checks for Super Admin routes & health check
+    if (req.originalUrl.startsWith('/api/superadmin') || req.originalUrl === '/health') {
+      return next();
+    }
+
     let tenantId = null;
 
     // 1. Resolve from explicit request header (Highest Priority)
@@ -45,7 +51,6 @@ export const tenantMiddleware = (req, res, next) => {
     if (!tenantId && req.originalUrl) {
       const urlSegments = req.originalUrl.split("?")[0].split("/");
       const lastSegment = urlSegments[urlSegments.length - 1];
-      // Only resolve if segment is a valid 10-char roll number (e.g. 19KH1A0512 or 23A91A0401)
       if (lastSegment && lastSegment.length >= 8 && /^[0-9]{2}[A-Za-z0-9]{2}[0-9]/i.test(lastSegment)) {
         tenantId = resolveOrgFromRollNumber(lastSegment);
       }
@@ -57,6 +62,32 @@ export const tenantMiddleware = (req, res, next) => {
     }
 
     const cleanTenantId = tenantId.toString().toLowerCase().trim();
+
+    // Check validity status in Super Admin Organization Registry
+    try {
+      const { OrganizationRegistry } = getSuperAdminDb();
+      const orgRecord = await OrganizationRegistry.findOne({ orgId: cleanTenantId });
+      if (orgRecord) {
+        const now = new Date();
+        if (orgRecord.status === 'suspended') {
+          return res.status(403).json({
+            success: false,
+            error: "ORGANIZATION_SUSPENDED",
+            message: `Institution '${orgRecord.name}' is currently suspended. Please contact Super Admin.`
+          });
+        }
+        if (orgRecord.validUntil && new Date(orgRecord.validUntil) < now) {
+          return res.status(403).json({
+            success: false,
+            error: "SUBSCRIPTION_EXPIRED",
+            message: `Subscription for '${orgRecord.name}' expired on ${new Date(orgRecord.validUntil).toLocaleDateString()}. Please contact Super Admin to renew.`
+          });
+        }
+      }
+    } catch (e) {
+      // Continue if DB check fails gracefully
+    }
+
     const tenantContext = getTenantContext(cleanTenantId);
 
     req.tenantId = tenantContext.tenantId;
@@ -69,3 +100,4 @@ export const tenantMiddleware = (req, res, next) => {
     next();
   }
 };
+
