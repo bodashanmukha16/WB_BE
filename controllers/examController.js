@@ -22,28 +22,57 @@ const findExamByIdOrCode = async (Exam, id) => {
   return doc;
 };
 
+const getExamDept = (exam) => {
+  if (exam.department && exam.department !== "all") {
+    return exam.department.toLowerCase();
+  }
+  const str = `${exam.code || ""} ${exam.title || ""} ${exam.subject || ""}`.toUpperCase();
+  if (str.includes("ECE") || str.includes("ELECTRONIC") || str.includes("VLSI") || str.includes("CIRCUIT")) {
+    return "ece";
+  }
+  if (str.includes("EEE") || str.includes("ELECTRICAL") || str.includes("POWER")) {
+    return "eee";
+  }
+  if (str.includes("MECH") || str.includes("MECHANICAL") || str.includes("THERMO") || str.includes("HEAT")) {
+    return "mech";
+  }
+  if (str.includes("CIVIL") || str.includes("STRUCTURAL") || str.includes("HYDRAULIC")) {
+    return "civil";
+  }
+  if (str.includes("CSE") || str.includes("COMPUTER") || str.includes("JAVA") || str.includes("DATA STRUCTURE")) {
+    return "cse";
+  }
+  return "cse";
+};
+
 export const getOrgExams = async (req, res) => {
   try {
     const tenantId = req.tenantId || req.headers["x-tenant-id"] || "svck";
-    const { department, branch } = req.query;
+    const departmentQuery = req.query.department || req.query.branch || req.headers["x-user-branch"];
     const { Exam, ExamQuestion } = req.tenantModels || {};
 
     let exams = [];
     if (Exam) {
-      const filter = {};
-      const targetBranch = department || branch;
-      if (targetBranch && targetBranch !== "all") {
-        const cleanBranch = resolveStudentBranch(targetBranch);
-        filter.$or = [{ department: cleanBranch }, { department: "all" }, { department: { $exists: false } }];
+      const rawExams = await Exam.find({}).sort({ createdAt: -1 });
+      
+      let cleanBranch = "all";
+      if (departmentQuery && departmentQuery !== "all") {
+        cleanBranch = resolveStudentBranch(departmentQuery);
       }
 
-      const rawExams = await Exam.find(filter).sort({ createdAt: -1 });
-      
-      // Populate question count for each exam from 'exam_questions' collection
       for (const e of rawExams) {
         const obj = e.toObject ? e.toObject() : { ...e };
         const mongoIdStr = e._id ? e._id.toString() : "";
-        
+        const computedDept = getExamDept(obj);
+
+        // Strictly filter by department if cleanBranch is specified and not 'all'
+        if (cleanBranch !== "all") {
+          if (computedDept !== cleanBranch && computedDept !== "all") {
+            continue; // Exclude exams belonging to other departments!
+          }
+        }
+
+        obj.department = computedDept;
         let qCount = 0;
         if (ExamQuestion) {
           qCount = await ExamQuestion.countDocuments({
