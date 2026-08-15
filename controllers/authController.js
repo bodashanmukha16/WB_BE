@@ -94,6 +94,9 @@ export const login = async (req, res) => {
         role: user.role || "student",
         name: user.fullname || user.username,
         branch: user.branch || user.department || resolveStudentBranch(user.username || user.email),
+        year: user.year !== undefined ? user.year : (user.academicYear || 2),
+        semester: user.semester || 1,
+        section: user.section || "A",
         orgId: finalOrgId,
         organization
       }

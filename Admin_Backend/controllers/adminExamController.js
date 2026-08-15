@@ -56,7 +56,9 @@ export const getExamById = async (req, res) => {
       return res.status(404).json({ success: false, message: "Exam not found" });
     }
 
-    const questions = await ExamQuestion.find({ examId: id });
+    const questions = await ExamQuestion.find({
+      $or: [{ examId: id }, { examId: id.toString() }, { examId: exam.code }]
+    }).sort({ questionId: 1, createdAt: 1 });
 
     res.status(200).json({
       success: true,

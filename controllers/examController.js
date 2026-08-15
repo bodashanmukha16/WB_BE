@@ -49,8 +49,9 @@ export const getOrgExams = async (req, res) => {
   try {
     const tenantId = req.tenantId || req.headers["x-tenant-id"] || "svck";
     const departmentQuery = req.query.department || req.query.branch || req.headers["x-user-branch"];
+    const yearQuery = req.query.year || req.headers["x-user-year"];
     const { Exam, ExamQuestion } = req.tenantModels || {};
-
+    console.log(yearQuery);
     let exams = [];
     if (Exam) {
       const rawExams = await Exam.find({}).sort({ createdAt: -1 });
@@ -72,6 +73,15 @@ export const getOrgExams = async (req, res) => {
           }
         }
 
+        // Strictly filter by academic year if student year is specified
+        if (yearQuery && yearQuery !== "all") {
+          const targetYear = Number(yearQuery);
+          const examYear = Number(obj.year || 3);
+          if (examYear !== targetYear) {
+            continue; // Exclude exams belonging to other academic years!
+          }
+        }
+
         obj.department = computedDept;
         let qCount = 0;
         if (ExamQuestion) {
@@ -81,7 +91,7 @@ export const getOrgExams = async (req, res) => {
         }
         
         obj.id = obj._id ? obj._id.toString() : obj.id;
-        obj.questionsCount = qCount || (e.questions ? e.questions.length : 10);
+        obj.questionsCount = qCount !== undefined ? qCount : (e.questions ? e.questions.length : 0);
         exams.push(obj);
       }
     }
@@ -133,6 +143,8 @@ export const getExamById = async (req, res) => {
           explanation: q.explanation || "",
           marks: q.marks || 2
         }));
+        examObj.questionsCount = dbQuestions.length;
+        examObj.totalMarks = dbQuestions.reduce((sum, q) => sum + Number(q.marks || 2), 0);
       }
     }
 
