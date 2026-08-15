@@ -10,16 +10,29 @@ export const superAdminLogin = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Username and password are required.' });
     }
 
+    const cleanUsername = username.toString().trim().toLowerCase();
+    const cleanPassword = password.toString().trim();
+
     const { SuperAdmin } = getSuperAdminDb();
     const admin = await SuperAdmin.findOne({
-      $or: [{ username: username.toLowerCase().trim() }, { email: username.toLowerCase().trim() }]
+      $or: [
+        { username: cleanUsername },
+        { email: cleanUsername },
+        { username: { $regex: new RegExp(`^${cleanUsername}$`, "i") } },
+        { email: { $regex: new RegExp(`^${cleanUsername}$`, "i") } }
+      ]
     });
 
     if (!admin) {
       return res.status(401).json({ success: false, message: 'Invalid Super Admin credentials.' });
     }
 
-    const isMatch = await bcrypt.compare(password, admin.password);
+    const dbPassword = (admin.password || "").toString().trim();
+    let isMatch = cleanPassword === dbPassword;
+    if (!isMatch && (dbPassword.startsWith('$2b$') || dbPassword.startsWith('$2a$') || dbPassword.startsWith('$2y$'))) {
+      isMatch = await bcrypt.compare(cleanPassword, dbPassword);
+    }
+
     if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Invalid Super Admin credentials.' });
     }

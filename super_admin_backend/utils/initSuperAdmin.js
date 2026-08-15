@@ -10,8 +10,11 @@ export const initSuperAdminDatabase = async () => {
     const { SuperAdmin, OrganizationRegistry } = getSuperAdminDb();
 
     // 1. Seed Default Super Admin Account if none exists
-    const existingAdminCount = await SuperAdmin.countDocuments();
-    if (existingAdminCount === 0) {
+    const existingAdmin = await SuperAdmin.findOne({
+      $or: [{ username: 'superadmin' }, { email: 'superadmin@workbench.com' }]
+    });
+
+    if (!existingAdmin) {
       const defaultPassword = process.env.SUPERADMIN_PASSWORD || 'SuperAdmin@123';
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(defaultPassword, salt);
