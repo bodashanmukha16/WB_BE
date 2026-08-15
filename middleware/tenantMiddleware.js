@@ -1,20 +1,15 @@
 import jwt from "jsonwebtoken";
 import { getTenantContext } from "../utils/tenantConnectionManager.js";
-import { resolveOrgFromRollNumber } from "../utils/rollNumberResolver.js";
+import { resolveOrgFromRollNumber, getCollegeCodeMap } from "../utils/rollNumberResolver.js";
 import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
 
 /**
- * Express middleware to identify college organization dynamically and enforce validity.
- * Priority:
- * 1. Explicit request header `x-tenant-id` (Highest Priority)
- * 2. Decoded JWT bearer token claims
- * 3. Username/roll number in request body (if valid roll number)
- * 4. Roll number in request URL path (only if valid roll number format)
- * 5. Default fallback
+ * Express middleware to identify college organization dynamically and enforce subscription validity.
+ * Blocks access with HTTP 403 if institution is suspended or expired.
  */
 export const tenantMiddleware = async (req, res, next) => {
   try {
-    // Skip validity checks for Super Admin routes & health check
+    // Skip validity checks for Super Admin routes & health check endpoint
     if (req.originalUrl.startsWith('/api/superadmin') || req.originalUrl === '/health') {
       return next();
     }
@@ -39,10 +34,10 @@ export const tenantMiddleware = async (req, res, next) => {
       }
     }
 
-    // 3. Check request body identifiers if valid roll number
+    // 3. Check request body identifiers if username/roll number/email
     if (!tenantId && req.body) {
-      const userIdentifier = req.body.username || req.body.userId || req.body.studentEmail;
-      if (userIdentifier && userIdentifier.length >= 8) {
+      const userIdentifier = req.body.username || req.body.userId || req.body.studentEmail || req.body.emailOrStaffId || req.body.email;
+      if (userIdentifier && userIdentifier.length >= 2) {
         tenantId = resolveOrgFromRollNumber(userIdentifier);
       }
     }
@@ -51,7 +46,7 @@ export const tenantMiddleware = async (req, res, next) => {
     if (!tenantId && req.originalUrl) {
       const urlSegments = req.originalUrl.split("?")[0].split("/");
       const lastSegment = urlSegments[urlSegments.length - 1];
-      if (lastSegment && lastSegment.length >= 8 && /^[0-9]{2}[A-Za-z0-9]{2}[0-9]/i.test(lastSegment)) {
+      if (lastSegment && lastSegment.length >= 4) {
         tenantId = resolveOrgFromRollNumber(lastSegment);
       }
     }
@@ -63,32 +58,55 @@ export const tenantMiddleware = async (req, res, next) => {
 
     const cleanTenantId = tenantId.toString().toLowerCase().trim();
 
-    // Check validity status in Super Admin Organization Registry
+    // Map 2-letter college code to clean orgId (e.g. 'kh' -> 'svck', 'a9' -> 'aits', 'sits' -> 's')
+    const codeMap = getCollegeCodeMap();
+    const resolvedOrgId = (codeMap[cleanTenantId.toUpperCase()] || cleanTenantId).toLowerCase().trim();
+
+    // 6. ENFORCE VALIDITY CHECK IN SUPER ADMIN ORGANIZATION REGISTRY
     try {
       const { OrganizationRegistry } = getSuperAdminDb();
-      const orgRecord = await OrganizationRegistry.findOne({ orgId: cleanTenantId });
+      
+      // Flexible query matching orgId, code, or dbName
+      const orgRecord = await OrganizationRegistry.findOne({
+        $or: [
+          { orgId: resolvedOrgId },
+          { orgId: cleanTenantId },
+          { code: cleanTenantId.toUpperCase() },
+          { code: resolvedOrgId.toUpperCase() },
+          { dbName: `wb_org_${resolvedOrgId}` },
+          { dbName: `wb_org_${cleanTenantId}` }
+        ]
+      });
+
       if (orgRecord) {
         const now = new Date();
+        
+        // CHECK 1: SUSPENDED STATUS
         if (orgRecord.status === 'suspended') {
+          console.warn(`⛔ ACCESS BLOCKED: Institution '${orgRecord.name}' [${orgRecord.orgId}] is SUSPENDED.`);
           return res.status(403).json({
             success: false,
             error: "ORGANIZATION_SUSPENDED",
-            message: `Institution '${orgRecord.name}' is currently suspended. Please contact Super Admin.`
+            message: `Institution '${orgRecord.name}' subscription is currently SUSPENDED. Access to portal & student records is blocked. Please contact Super Admin.`
           });
         }
-        if (orgRecord.validUntil && new Date(orgRecord.validUntil) < now) {
+
+        // CHECK 2: EXPIRED STATUS OR EXPIRATION DATE PASSED
+        if (orgRecord.status === 'expired' || (orgRecord.validUntil && new Date(orgRecord.validUntil) < now)) {
+          console.warn(`⛔ ACCESS BLOCKED: Institution '${orgRecord.name}' [${orgRecord.orgId}] subscription EXPIRED on ${orgRecord.validUntil}.`);
           return res.status(403).json({
             success: false,
             error: "SUBSCRIPTION_EXPIRED",
-            message: `Subscription for '${orgRecord.name}' expired on ${new Date(orgRecord.validUntil).toLocaleDateString()}. Please contact Super Admin to renew.`
+            message: `Institution '${orgRecord.name}' subscription expired on ${new Date(orgRecord.validUntil).toLocaleDateString()}. Access to portal & student records is blocked. Please contact Super Admin to renew.`
           });
         }
       }
-    } catch (e) {
-      // Continue if DB check fails gracefully
+    } catch (dbErr) {
+      console.error("Validity check DB query error:", dbErr.message);
     }
 
-    const tenantContext = getTenantContext(cleanTenantId);
+    // Set Tenant Context on Request Object
+    const tenantContext = getTenantContext(resolvedOrgId);
 
     req.tenantId = tenantContext.tenantId;
     req.dbName = tenantContext.dbName;
@@ -100,4 +118,3 @@ export const tenantMiddleware = async (req, res, next) => {
     next();
   }
 };
-
