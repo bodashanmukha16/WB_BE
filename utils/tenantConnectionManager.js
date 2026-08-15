@@ -70,10 +70,12 @@ export const getTenantContext = (tenantId = "default") => {
   });
 
   // 3. Organization Exams Schema & Model ('org_exams')
-  const examSchema = mongoose.models.Exam?.schema || new mongoose.Schema({
+  const examSchema = new mongoose.Schema({
     title: { type: String, required: true },
     subject: { type: String, required: true },
     code: { type: String, required: true },
+    department: { type: String, default: "cse", lowercase: true, trim: true },
+    year: { type: Number, default: 3 },
     orgId: { type: String, required: true },
     category: { type: String, default: "Mid-Term Examination" },
     durationMinutes: { type: Number, default: 30 },

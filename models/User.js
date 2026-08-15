@@ -20,14 +20,14 @@ const userSchema = new mongoose.Schema(
     fullname: String,
     orgId: {
       type: String,
-      default: "jntuk",
+      default: "svck",
       lowercase: true,
       trim: true,
       index: true
     },
     organization: {
       type: String,
-      default: "JNTUK College of Engineering"
+      default: "SV College of Engineering"
     },
     role: {
       type: String,

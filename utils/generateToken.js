@@ -7,8 +7,8 @@ const generateToken = (user) => {
       username: user.username,
       email: user.email,
       role: user.role || "student",
-      orgId: user.orgId || "jntuk",
-      organization: user.organization || "JNTUK College of Engineering"
+      orgId: user.orgId || "svck",
+      organization: user.organization || "SV College of Engineering"
     },
     process.env.JWT_SECRET || "supersecretkey",
     { expiresIn: "7d" }

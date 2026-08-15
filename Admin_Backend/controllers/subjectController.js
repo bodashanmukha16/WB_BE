@@ -4,7 +4,7 @@ const getTenantSubjectModel = (req) => {
   if (req.tenantModels && req.tenantModels.Subject) {
     return req.tenantModels.Subject;
   }
-  const orgId = req.headers["x-tenant-id"] || req.tenantId || "jntuk";
+  const orgId = req.headers["x-tenant-id"] || req.tenantId || "svck";
   return getTenantContext(orgId).models.Subject;
 };
 
@@ -36,7 +36,7 @@ export const getSubjects = async (req, res) => {
 
     // Auto-seed comprehensive subjects for all years if subjects collection is empty
     if (subjects.length === 0) {
-      const orgId = req.tenantId || "jntuk";
+      const orgId = req.tenantId || req.headers["x-tenant-id"] || "svck";
       const defaultSubjects = [
         // Year 1 CSE
         { subjectCode: "CS101", subjectName: "Programming in C & Problem Solving", department: "cse", year: 1, semester: 1, type: "Theory", credits: 4, orgId },
@@ -73,7 +73,17 @@ export const getSubjects = async (req, res) => {
       subjects = await TenantSubject.find({}).sort({ year: 1, subjectCode: 1 });
     }
 
-    res.status(200).json({ success: true, count: subjects.length, subjects });
+    // Deduplicate subjects by subjectName to prevent multiple duplicate entries in dropdowns
+    const uniqueMap = new Map();
+    subjects.forEach((s) => {
+      const key = s.subjectName.trim().toLowerCase();
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, s);
+      }
+    });
+    const uniqueSubjects = Array.from(uniqueMap.values());
+
+    res.status(200).json({ success: true, count: uniqueSubjects.length, subjects: uniqueSubjects });
   } catch (error) {
     console.error("Error fetching subjects:", error);
     res.status(500).json({ success: false, message: "Error retrieving subjects list" });
@@ -85,7 +95,7 @@ export const createSubject = async (req, res) => {
   try {
     const { subjectCode, subjectName, department, year, semester, type, credits } = req.body;
     const TenantSubject = getTenantSubjectModel(req);
-    const orgId = req.tenantId || "jntuk";
+    const orgId = req.tenantId || req.headers["x-tenant-id"] || "svck";
 
     if (!subjectCode || !subjectName || !department || !year) {
       return res.status(400).json({ success: false, message: "Subject Code, Name, Department, and Year are required" });

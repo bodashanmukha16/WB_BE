@@ -24,12 +24,20 @@ const findExamByIdOrCode = async (Exam, id) => {
 
 export const getOrgExams = async (req, res) => {
   try {
-    const tenantId = req.tenantId || "jntuk";
+    const tenantId = req.tenantId || req.headers["x-tenant-id"] || "svck";
+    const { department, branch } = req.query;
     const { Exam, ExamQuestion } = req.tenantModels || {};
 
     let exams = [];
     if (Exam) {
-      const rawExams = await Exam.find({}).sort({ createdAt: -1 });
+      const filter = {};
+      const targetBranch = department || branch;
+      if (targetBranch && targetBranch !== "all") {
+        const cleanBranch = resolveStudentBranch(targetBranch);
+        filter.$or = [{ department: cleanBranch }, { department: "all" }, { department: { $exists: false } }];
+      }
+
+      const rawExams = await Exam.find(filter).sort({ createdAt: -1 });
       
       // Populate question count for each exam from 'exam_questions' collection
       for (const e of rawExams) {
@@ -78,16 +86,17 @@ export const getExamById = async (req, res) => {
     const examObj = examDoc.toObject ? examDoc.toObject() : { ...examDoc };
     examObj.id = examObj._id ? examObj._id.toString() : (examObj.id || id);
 
-    // Fetch questions from 'exam_questions' collection under current Organization DB
+    // Fetch questions strictly belonging to this exam ID
     if (ExamQuestion) {
       const mongoIdStr = examDoc._id ? examDoc._id.toString() : id;
       const dbQuestions = await ExamQuestion.find({
-        $or: [{ examId: mongoIdStr }, { examId: id }, { examId: examDoc.code }]
-      }).sort({ createdAt: 1 });
+        $or: [{ examId: mongoIdStr }, { examId: id }]
+      }).sort({ questionId: 1, createdAt: 1 });
 
       if (dbQuestions && dbQuestions.length > 0) {
         examObj.questions = dbQuestions.map((q) => ({
-          id: q.questionId || (q._id ? q._id.toString() : q.id),
+          id: q._id ? q._id.toString() : (q.id || q.questionId),
+          questionId: q.questionId || (q._id ? q._id.toString() : q.id),
           text: q.text,
           codeSnippet: q.codeSnippet || "",
           options: q.options,
@@ -111,8 +120,8 @@ export const getExamById = async (req, res) => {
 export const submitExam = async (req, res) => {
   try {
     const { id } = req.params;
-    const { userId, studentEmail, studentName, branch, answers, violationsCount, timeSpentSeconds } = req.body;
-    const tenantId = req.tenantId || "jntuk";
+    const { userId, studentEmail, studentName, branch, studentBranch, department, answers, violationsCount, timeSpentSeconds } = req.body;
+    const tenantId = req.tenantId || req.headers["x-tenant-id"] || "svck";
     const { Exam, ExamQuestion, getBranchResultsModel } = req.tenantModels || {};
 
     if (!Exam) {
@@ -130,8 +139,8 @@ export const submitExam = async (req, res) => {
     let questions = [];
     if (ExamQuestion) {
       questions = await ExamQuestion.find({
-        $or: [{ examId: mongoIdStr }, { examId: id }, { examId: examDoc.code }]
-      });
+        $or: [{ examId: mongoIdStr }, { examId: id }]
+      }).sort({ questionId: 1, createdAt: 1 });
     }
 
     if (!questions || questions.length === 0) {
@@ -142,8 +151,12 @@ export const submitExam = async (req, res) => {
     const totalMarks = examDoc.totalMarks || (questions.length * 2);
 
     questions.forEach((q) => {
-      const qId = q.questionId || (q._id ? q._id.toString() : q.id);
-      const selectedOpt = answers[qId] !== undefined ? answers[qId] : answers[q.id];
+      const mongoIdKey = q._id ? q._id.toString() : q.id;
+      const customIdKey = q.questionId;
+      const selectedOpt = answers[mongoIdKey] !== undefined 
+        ? answers[mongoIdKey] 
+        : (answers[customIdKey] !== undefined ? answers[customIdKey] : answers[q.id]);
+
       if (selectedOpt !== undefined && Number(selectedOpt) === Number(q.correctOptionIndex)) {
         score += (q.marks || 2);
       }
@@ -161,7 +174,8 @@ export const submitExam = async (req, res) => {
     else if (percentage >= 40) grade = "D (Pass)";
 
     // Resolve student academic branch (e.g. 'cse', 'ece', 'eee', 'mech', 'civil')
-    const resolvedBranch = resolveStudentBranch(branch || userId || studentEmail);
+    const rawBranchInput = branch || studentBranch || department || examDoc.department || userId || studentEmail;
+    const resolvedBranch = resolveStudentBranch(rawBranchInput);
 
     const submissionPayload = {
       examId: mongoIdStr,

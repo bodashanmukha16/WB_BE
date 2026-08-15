@@ -8,13 +8,13 @@ const resolveOrgFromEmailOrId = (identifier = "") => {
   const str = identifier.toLowerCase().trim();
   if (str.includes("@svck.edu.in") || str.includes("svck")) return "svck";
   if (str.includes("@aits.edu.in") || str.includes("aits")) return "aits";
-  if (str.includes("@jntuk.edu.in") || str.includes("jntuk") || str.includes("workbench")) return "jntuk";
-  return "jntuk";
+  if (str.includes("@jntuk.edu.in") || str.includes("jntuk")) return "jntuk";
+  return "svck";
 };
 
 // Helper to resolve physical tenant StaffUser model for current organization
 const getTenantStaffModel = (req, targetOrgId = null) => {
-  const orgId = targetOrgId || req.headers["x-tenant-id"] || req.tenantId || "jntuk";
+  const orgId = targetOrgId || req.headers["x-tenant-id"] || req.tenantId || "svck";
   return getTenantContext(orgId).models.StaffUser;
 };
 
@@ -28,7 +28,17 @@ export const staffLogin = async (req, res) => {
     }
 
     const searchStr = emailOrStaffId.trim();
-    const detectedOrgId = req.headers["x-tenant-id"] || resolveOrgFromEmailOrId(searchStr);
+
+    // Priority 1: Check if email/ID string contains explicit org key (e.g. svck, aits)
+    let domainOrgId = null;
+    const lowerSearch = searchStr.toLowerCase();
+    if (lowerSearch.includes("svck")) domainOrgId = "svck";
+    else if (lowerSearch.includes("aits")) domainOrgId = "aits";
+    else if (lowerSearch.includes("jntuk")) domainOrgId = "jntuk";
+
+    // Priority 2: Use domainOrgId if found, otherwise header, otherwise default "svck"
+    let detectedOrgId = domainOrgId || req.headers["x-tenant-id"] || "svck";
+    if (detectedOrgId === "undefined" || detectedOrgId === "null") detectedOrgId = "svck";
 
     const TenantStaff = getTenantStaffModel(req, detectedOrgId);
 
@@ -41,7 +51,32 @@ export const staffLogin = async (req, res) => {
       ]
     });
 
-    // 2. Fallback to global StaffUser model if not found in tenant DB
+    // 2. If not found in target DB, search across ALL known tenant DBs (svck, aits, jntuk)
+    if (!staff) {
+      const allOrgs = ["svck", "aits", "jntuk"];
+      for (const org of allOrgs) {
+        if (org === detectedOrgId) continue;
+        try {
+          const AltTenantStaff = getTenantStaffModel(req, org);
+          const altStaff = await AltTenantStaff.findOne({
+            $or: [
+              { email: searchStr.toLowerCase() },
+              { staffId: searchStr.toUpperCase() },
+              { email: searchStr }
+            ]
+          });
+          if (altStaff) {
+            staff = altStaff;
+            detectedOrgId = org;
+            break;
+          }
+        } catch (e) {
+          // ignore error for single org search attempt
+        }
+      }
+    }
+
+    // 3. Fallback to global StaffUser model if not found in any tenant DB
     if (!staff) {
       staff = await StaffUser.findOne({
         $or: [
@@ -68,7 +103,7 @@ export const staffLogin = async (req, res) => {
       return res.status(401).json({ success: false, message: "Invalid password or credentials" });
     }
 
-    const finalOrgId = (staff.orgId || detectedOrgId || "jntuk").toLowerCase().trim();
+    const finalOrgId = (staff.orgId || detectedOrgId || "svck").toLowerCase().trim();
 
     const token = jwt.sign(
       {
@@ -102,7 +137,7 @@ export const staffLogin = async (req, res) => {
 export const getAllStaff = async (req, res) => {
   try {
     const { department, role } = req.query;
-    const orgId = (req.headers["x-tenant-id"] || req.tenantId || "jntuk").toLowerCase().trim();
+    const orgId = (req.headers["x-tenant-id"] || req.tenantId || "svck").toLowerCase().trim();
 
     const TenantStaff = getTenantStaffModel(req, orgId);
     const filter = {};
@@ -141,7 +176,7 @@ export const getAllStaff = async (req, res) => {
 export const createStaff = async (req, res) => {
   try {
     const { staffId, fullname, email, password, role, department, assignedSubjects, phone } = req.body;
-    const orgId = (req.headers["x-tenant-id"] || req.tenantId || "jntuk").toLowerCase().trim();
+    const orgId = (req.headers["x-tenant-id"] || req.tenantId || "svck").toLowerCase().trim();
 
     const TenantStaff = getTenantStaffModel(req, orgId);
 
@@ -196,7 +231,7 @@ export const createStaff = async (req, res) => {
 export const updateStaff = async (req, res) => {
   try {
     const { id } = req.params;
-    const orgId = (req.headers["x-tenant-id"] || req.tenantId || "jntuk").toLowerCase().trim();
+    const orgId = (req.headers["x-tenant-id"] || req.tenantId || "svck").toLowerCase().trim();
     const TenantStaff = getTenantStaffModel(req, orgId);
 
     const updateData = { ...req.body };
@@ -225,7 +260,7 @@ export const updateStaff = async (req, res) => {
 export const deleteStaff = async (req, res) => {
   try {
     const { id } = req.params;
-    const orgId = (req.headers["x-tenant-id"] || req.tenantId || "jntuk").toLowerCase().trim();
+    const orgId = (req.headers["x-tenant-id"] || req.tenantId || "svck").toLowerCase().trim();
     const TenantStaff = getTenantStaffModel(req, orgId);
 
     let deleted = await TenantStaff.findByIdAndDelete(id);

@@ -53,7 +53,7 @@ export const tenantMiddleware = (req, res, next) => {
 
     // 5. Default fallback
     if (!tenantId) {
-      tenantId = "jntuk";
+      tenantId = "svck";
     }
 
     const cleanTenantId = tenantId.toString().toLowerCase().trim();

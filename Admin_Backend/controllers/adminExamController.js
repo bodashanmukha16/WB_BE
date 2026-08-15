@@ -7,7 +7,7 @@ const getTenantExamModels = (req) => {
       ExamQuestion: req.tenantModels.ExamQuestion
     };
   }
-  const orgId = req.headers["x-tenant-id"] || req.tenantId || "jntuk";
+  const orgId = req.headers["x-tenant-id"] || req.tenantId || "svck";
   const ctx = getTenantContext(orgId);
   return {
     Exam: ctx.models.Exam,
@@ -88,7 +88,7 @@ export const createExam = async (req, res) => {
     } = req.body;
 
     const { Exam, ExamQuestion } = getTenantExamModels(req);
-    const orgId = req.tenantId || "jntuk";
+    const orgId = req.tenantId || req.headers["x-tenant-id"] || "svck";
 
     if (!title || !code || !subject) {
       return res.status(400).json({ success: false, message: "Exam Title, Code, and Subject are required" });
@@ -119,7 +119,7 @@ export const createExam = async (req, res) => {
         subject,
         text: q.text,
         options: q.options || [],
-        correctOptionIndex: Number(q.correctOptionIndex || 0),
+        correctOptionIndex: Number(q.correctOptionIndex !== undefined ? q.correctOptionIndex : 0),
         explanation: q.explanation || "",
         marks: Number(q.marks || 2)
       }));
@@ -142,11 +142,35 @@ export const createExam = async (req, res) => {
 export const updateExam = async (req, res) => {
   try {
     const { id } = req.params;
-    const { Exam } = getTenantExamModels(req);
+    const { questions, ...updateData } = req.body;
+    const { Exam, ExamQuestion } = getTenantExamModels(req);
+    const orgId = req.tenantId || req.headers["x-tenant-id"] || "svck";
 
-    const updated = await Exam.findByIdAndUpdate(id, req.body, { new: true });
+    if (updateData.department) updateData.department = updateData.department.toLowerCase();
+    if (updateData.year) updateData.year = Number(updateData.year);
+
+    const updated = await Exam.findByIdAndUpdate(id, updateData, { new: true });
     if (!updated) {
       return res.status(404).json({ success: false, message: "Exam not found" });
+    }
+
+    // Update questions if provided
+    if (questions && Array.isArray(questions)) {
+      await ExamQuestion.deleteMany({ examId: id });
+      if (questions.length > 0) {
+        const questionDocs = questions.map((q, idx) => ({
+          questionId: `Q${idx + 1}`,
+          examId: id,
+          orgId,
+          subject: updated.subject,
+          text: q.text,
+          options: q.options || [],
+          correctOptionIndex: Number(q.correctOptionIndex !== undefined ? q.correctOptionIndex : 0),
+          explanation: q.explanation || "",
+          marks: Number(q.marks || 2)
+        }));
+        await ExamQuestion.insertMany(questionDocs);
+      }
     }
 
     res.status(200).json({

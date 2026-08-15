@@ -21,10 +21,11 @@ export const getCollegeCodeMap = () => {
  * and resolves the matching organization ID strictly from .env mapping.
  */
 export const resolveOrgFromRollNumber = (input = "") => {
-  if (!input) return "jntuk";
+  const codeMap = getCollegeCodeMap();
+  const firstConfiguredOrg = Object.values(codeMap)[0] || "svck";
+  if (!input) return firstConfiguredOrg;
 
   const str = input.toString().trim().toUpperCase();
-  const codeMap = getCollegeCodeMap();
 
   // 1. Extract 2-char code at index 2 & 3 (e.g. '19KH1A0512' -> 'KH')
   if (str.length >= 4) {
@@ -41,9 +42,8 @@ export const resolveOrgFromRollNumber = (input = "") => {
     }
   }
 
-  // Fallback to first orgId in env or default 'jntuk'
-  const firstConfiguredOrg = Object.values(codeMap)[0];
-  return firstConfiguredOrg || "jntuk";
+  // Fallback to first orgId in env or default 'svck'
+  return firstConfiguredOrg;
 };
 
 export default resolveOrgFromRollNumber;

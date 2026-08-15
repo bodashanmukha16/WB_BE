@@ -48,7 +48,7 @@ const staffUserSchema = new mongoose.Schema(
     ],
     orgId: {
       type: String,
-      default: "jntuk",
+      default: "svck",
       lowercase: true,
       trim: true,
       index: true
