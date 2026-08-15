@@ -40,12 +40,21 @@ export const login = async (req, res) => {
 
     // 3. Universal fallback search across all college organization databases
     if (!user) {
-      const orgList = ["jntuk", "aits"];
-      for (const orgId of orgList) {
-        const ctx = getTenantContext(orgId);
-        user = await ctx.models.User.findOne(caseInsensitiveQuery);
-        if (user) break;
-      }
+      try {
+        const codeMap = getCollegeCodeMap();
+        const dynamicOrgs = new Set(Object.values(codeMap).map(v => v.toLowerCase().trim()));
+        dynamicOrgs.add("svck");
+        dynamicOrgs.add("aits");
+        dynamicOrgs.add("jntuk");
+        dynamicOrgs.add("s");
+
+        for (const orgId of Array.from(dynamicOrgs)) {
+          if (orgId === targetOrgId) continue;
+          const ctx = getTenantContext(orgId);
+          user = await ctx.models.User.findOne(caseInsensitiveQuery);
+          if (user) break;
+        }
+      } catch (e) {}
     }
 
     if (!user) {

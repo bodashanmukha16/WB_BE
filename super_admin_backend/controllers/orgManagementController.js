@@ -446,6 +446,10 @@ const updateSingleEnvFile = (filePath, code, orgId, name, logo, isVite = false) 
     }
 
     fs.writeFileSync(filePath, content, 'utf-8');
+
+    // Update in-memory process.env so Node server reflects changes instantly
+    process.env[codeKey] = JSON.stringify(existingCodesMap);
+    process.env[detailsKey] = JSON.stringify(existingDetailsMap);
   } catch (err) {
     console.warn(`Could not update ${filePath}:`, err.message);
   }

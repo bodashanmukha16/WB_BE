@@ -2,20 +2,37 @@ import StaffUser from "../models/StaffUser.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import getTenantContext from "../../utils/tenantConnectionManager.js";
+import getSuperAdminDb from "../../super_admin_backend/utils/superAdminDb.js";
+import { resolveOrgFromRollNumber, getCollegeCodeMap } from "../../utils/rollNumberResolver.js";
 
-// Helper to resolve orgId from email or staffId string
-const resolveOrgFromEmailOrId = (identifier = "") => {
-  const str = identifier.toLowerCase().trim();
-  if (str.includes("@svck.edu.in") || str.includes("svck")) return "svck";
-  if (str.includes("@aits.edu.in") || str.includes("aits")) return "aits";
-  if (str.includes("@jntuk.edu.in") || str.includes("jntuk")) return "jntuk";
-  return "svck";
+// Helper to dynamically fetch all registered and known tenant organization IDs
+const getAllTenantOrgIds = async () => {
+  const orgSet = new Set(["svck", "aits", "jntuk", "s"]);
+  try {
+    const codeMap = getCollegeCodeMap();
+    Object.values(codeMap).forEach(id => {
+      if (id) orgSet.add(id.toLowerCase().trim());
+    });
+
+    const { OrganizationRegistry } = getSuperAdminDb();
+    const regOrgs = await OrganizationRegistry.find().select("orgId code");
+    regOrgs.forEach(o => {
+      if (o.orgId) orgSet.add(o.orgId.toLowerCase().trim());
+      if (o.code) orgSet.add(o.code.toLowerCase().trim());
+    });
+  } catch (e) {
+    // Fallback if super admin db is not reachable
+  }
+  return Array.from(orgSet);
 };
 
 // Helper to resolve physical tenant StaffUser model for current organization
 const getTenantStaffModel = (req, targetOrgId = null) => {
   const orgId = targetOrgId || req.headers["x-tenant-id"] || req.tenantId || "svck";
-  return getTenantContext(orgId).models.StaffUser;
+  const cleanOrgId = orgId.toString().toLowerCase().trim();
+  const codeMap = getCollegeCodeMap();
+  const resolvedId = (codeMap[cleanOrgId.toUpperCase()] || cleanOrgId).toLowerCase().trim();
+  return getTenantContext(resolvedId).models.StaffUser;
 };
 
 // Staff Login for Admin, Principal, HOD, and Lecturers (Queries physical org DB wb_org_[orgId].staff_database)
@@ -28,59 +45,66 @@ export const staffLogin = async (req, res) => {
     }
 
     const searchStr = emailOrStaffId.trim();
-
-    // Priority 1: Check if email/ID string contains explicit org key (e.g. svck, aits)
-    let domainOrgId = null;
     const lowerSearch = searchStr.toLowerCase();
-    if (lowerSearch.includes("svck")) domainOrgId = "svck";
-    else if (lowerSearch.includes("aits")) domainOrgId = "aits";
-    else if (lowerSearch.includes("jntuk")) domainOrgId = "jntuk";
 
-    // Priority 2: Use domainOrgId if found, otherwise header, otherwise default "svck"
-    let detectedOrgId = domainOrgId || req.headers["x-tenant-id"] || "svck";
-    if (detectedOrgId === "undefined" || detectedOrgId === "null") detectedOrgId = "svck";
+    // 1. Resolve detectedOrgId dynamically using resolveOrgFromRollNumber & codeMap
+    let detectedOrgId = null;
+    const headerOrg = req.headers["x-tenant-id"];
 
-    const TenantStaff = getTenantStaffModel(req, detectedOrgId);
+    if (headerOrg && headerOrg !== "undefined" && headerOrg !== "null") {
+      const codeMap = getCollegeCodeMap();
+      detectedOrgId = (codeMap[headerOrg.toUpperCase()] || headerOrg).toLowerCase().trim();
+    }
 
-    // 1. Check physical tenant database collection wb_org_[detectedOrgId].staff_database
+    if (!detectedOrgId || detectedOrgId === "svck") {
+      detectedOrgId = resolveOrgFromRollNumber(searchStr);
+    }
+
+    if (!detectedOrgId) detectedOrgId = "svck";
+    let cleanOrgId = detectedOrgId.toLowerCase().trim();
+
+    // 2. Search primary target tenant database collection wb_org_[cleanOrgId].staff_database
+    const TenantStaff = getTenantStaffModel(req, cleanOrgId);
     let staff = await TenantStaff.findOne({
       $or: [
-        { email: searchStr.toLowerCase() },
+        { email: lowerSearch },
         { staffId: searchStr.toUpperCase() },
         { email: searchStr }
       ]
     });
 
-    // 2. If not found in target DB, search across ALL known tenant DBs (svck, aits, jntuk)
+    let finalOrgId = cleanOrgId;
+
+    // 3. If not found in primary DB, search across ALL registered tenant DBs dynamically (svck, aits, sits, jntuk, etc.)
     if (!staff) {
-      const allOrgs = ["svck", "aits", "jntuk"];
+      const allOrgs = await getAllTenantOrgIds();
       for (const org of allOrgs) {
-        if (org === detectedOrgId) continue;
+        if (org === cleanOrgId) continue;
         try {
           const AltTenantStaff = getTenantStaffModel(req, org);
           const altStaff = await AltTenantStaff.findOne({
             $or: [
-              { email: searchStr.toLowerCase() },
+              { email: lowerSearch },
               { staffId: searchStr.toUpperCase() },
               { email: searchStr }
             ]
           });
           if (altStaff) {
             staff = altStaff;
-            detectedOrgId = org;
+            finalOrgId = org;
             break;
           }
         } catch (e) {
-          // ignore error for single org search attempt
+          // Continue to next org
         }
       }
     }
 
-    // 3. Fallback to global StaffUser model if not found in any tenant DB
+    // 4. Fallback to global StaffUser model if not found in any tenant DB
     if (!staff) {
       staff = await StaffUser.findOne({
         $or: [
-          { email: searchStr.toLowerCase() },
+          { email: lowerSearch },
           { staffId: searchStr.toUpperCase() },
           { email: searchStr }
         ]
@@ -88,7 +112,10 @@ export const staffLogin = async (req, res) => {
     }
 
     if (!staff) {
-      return res.status(404).json({ success: false, message: `Staff account not found in Org DB [wb_org_${detectedOrgId}]` });
+      return res.status(404).json({
+        success: false,
+        message: `Staff account '${searchStr}' not found in any organization database. Please verify your Staff ID.`
+      });
     }
 
     // Password verification (bcrypt or plain-text fallback)
@@ -103,7 +130,7 @@ export const staffLogin = async (req, res) => {
       return res.status(401).json({ success: false, message: "Invalid password or credentials" });
     }
 
-    const finalOrgId = (staff.orgId || detectedOrgId || "svck").toLowerCase().trim();
+    const resolvedFinalOrgId = (staff.orgId || finalOrgId || "svck").toLowerCase().trim();
 
     const token = jwt.sign(
       {
@@ -111,7 +138,7 @@ export const staffLogin = async (req, res) => {
         staffId: staff.staffId,
         role: staff.role,
         department: staff.department,
-        orgId: finalOrgId
+        orgId: resolvedFinalOrgId
       },
       process.env.JWT_SECRET || "antigravity_secret_key",
       { expiresIn: "7d" }
@@ -119,11 +146,11 @@ export const staffLogin = async (req, res) => {
 
     const staffObj = staff.toObject();
     delete staffObj.password;
-    staffObj.orgId = finalOrgId;
+    staffObj.orgId = resolvedFinalOrgId;
 
     res.status(200).json({
       success: true,
-      message: `Welcome, ${staff.fullname} (${staff.role.toUpperCase()}) to Org DB [wb_org_${finalOrgId}]`,
+      message: `Welcome, ${staff.fullname} (${staff.role.toUpperCase()}) to Org DB [wb_org_${resolvedFinalOrgId}]`,
       token,
       staff: staffObj
     });
@@ -133,7 +160,7 @@ export const staffLogin = async (req, res) => {
   }
 };
 
-// Fetch All Staff Members from physical Org DB (e.g. wb_org_svck.staff_database for SVCK)
+// Fetch All Staff Members from physical Org DB
 export const getAllStaff = async (req, res) => {
   try {
     const { department, role } = req.query;
@@ -150,10 +177,8 @@ export const getAllStaff = async (req, res) => {
       filter.role = role.toLowerCase();
     }
 
-    // Fetch staff physically stored inside tenant collection `wb_org_[orgId].staff_database`
     let staffList = await TenantStaff.find(filter).select("-password").sort({ fullname: 1 });
 
-    // Fallback to global model filter if physical tenant collection is being initialized
     if (staffList.length === 0) {
       filter.$or = [{ orgId }, { orgId: { $exists: false } }];
       staffList = await StaffUser.find(filter).select("-password").sort({ fullname: 1 });
@@ -172,7 +197,7 @@ export const getAllStaff = async (req, res) => {
   }
 };
 
-// Create Staff Member inside physical Org DB (wb_org_[orgId].staff_database)
+// Create Staff Member inside physical Org DB
 export const createStaff = async (req, res) => {
   try {
     const { staffId, fullname, email, password, role, department, assignedSubjects, phone } = req.body;
@@ -202,11 +227,9 @@ export const createStaff = async (req, res) => {
       orgId
     };
 
-    // Save physically in tenant org DB `wb_org_[orgId].staff_database`
     const newTenantStaff = new TenantStaff(newStaffData);
     await newTenantStaff.save();
 
-    // Also sync in global StaffUser for login lookup
     await StaffUser.updateOne(
       { staffId: staffId.toUpperCase() },
       { $set: newStaffData },

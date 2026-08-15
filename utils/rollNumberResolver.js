@@ -3,7 +3,7 @@ dotenv.config();
 
 /**
  * Dynamically parses process.env.COLLEGE_CODES JSON mapping.
- * Example: process.env.COLLEGE_CODES = '{"KH":"jntuk","A9":"aits"}'
+ * Example: process.env.COLLEGE_CODES = '{"KH":"svck","A9":"aits","SITS":"s"}'
  */
 export const getCollegeCodeMap = () => {
   try {
@@ -17,42 +17,43 @@ export const getCollegeCodeMap = () => {
 };
 
 /**
- * Extracts college code from student roll number (e.g. '19KH1A0512' -> 'KH')
- * and resolves the matching organization ID strictly from .env mapping.
+ * Resolves organization ID dynamically from student roll number or email
+ * strictly using process.env.COLLEGE_CODES mapping with ZERO hardcoded org IDs.
  */
 export const resolveOrgFromRollNumber = (input = "") => {
   const codeMap = getCollegeCodeMap();
-  const defaultOrg = codeMap["SVCK"] || codeMap["SV"] || codeMap["KH"] || "svck";
+  const defaultOrg = Object.values(codeMap)[0] || "svck";
   if (!input) return defaultOrg;
 
   const str = input.toString().trim().toUpperCase();
+  const lowerStr = str.toLowerCase();
 
-  // 1. Direct text check for SVCK, SV, AITS, JNTUK in input
-  if (str.includes("SVCK") || str.includes("SV") || str.includes("KH")) return "svck";
-  if (str.includes("AITS") || str.includes("A9")) return "aits";
+  // 1. Scan configured codes and orgIds strictly from .env mapping
+  for (const [code, orgId] of Object.entries(codeMap)) {
+    const cleanCode = code.toUpperCase();
+    const cleanOrgId = orgId.toLowerCase();
 
-  // 2. Check 4-char substring (e.g. '23SVCK0542' -> 'SVCK')
-  if (str.length >= 6) {
-    const fourChar = str.substring(2, 6);
-    if (codeMap[fourChar]) return codeMap[fourChar];
+    if (str.includes(cleanCode) || lowerStr.includes(cleanOrgId)) {
+      return cleanOrgId;
+    }
   }
 
-  // 3. Extract 2-char code at index 2 & 3 (e.g. '19KH1A0512' -> 'KH')
+  // 2. Check 4-character code substring (e.g. '23SITS1A0501' -> 'SITS')
+  if (str.length >= 6) {
+    const fourChar = str.substring(2, 6);
+    if (codeMap[fourChar]) {
+      return codeMap[fourChar].toLowerCase();
+    }
+  }
+
+  // 3. Check 2-character code substring at index 2 & 3 (e.g. '19KH1A0512' -> 'KH', '23A91A0401' -> 'A9')
   if (str.length >= 4) {
     const codeAtPos = str.substring(2, 4);
     if (codeMap[codeAtPos]) {
-      return codeMap[codeAtPos];
+      return codeMap[codeAtPos].toLowerCase();
     }
   }
 
-  // 4. Scan if any configured code key from .env exists in string
-  for (const [code, orgId] of Object.entries(codeMap)) {
-    if (str.includes(code)) {
-      return orgId;
-    }
-  }
-
-  // Fallback to svck
   return defaultOrg;
 };
 
