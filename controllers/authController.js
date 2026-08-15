@@ -3,6 +3,7 @@ import generateToken from "../utils/generateToken.js";
 import User from "../models/User.js";
 import { getTenantContext } from "../utils/tenantConnectionManager.js";
 import { resolveOrgFromRollNumber } from "../utils/rollNumberResolver.js";
+import { resolveStudentBranch } from "../utils/branchResolver.js";
 
 export const login = async (req, res) => {
   const { username, password } = req.body;
@@ -92,7 +93,7 @@ export const login = async (req, res) => {
         email: user.email,
         role: user.role || "student",
         name: user.fullname || user.username,
-        branch: user.branch || "CSE",
+        branch: user.branch || user.department || resolveStudentBranch(user.username || user.email),
         orgId: finalOrgId,
         organization
       }
