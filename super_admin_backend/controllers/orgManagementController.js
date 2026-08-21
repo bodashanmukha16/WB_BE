@@ -526,6 +526,9 @@ export const addOrgIpPoolEntry = async (req, res) => {
       await org.save();
     }
 
+    console.log(`\n➕ MongoDB UPDATE: Added Whitelisted IP '${cleanIp}' for Org '${org.orgId.toUpperCase()}'.`);
+    console.log(`🗄️ Updated MongoDB Allowed IP Pool:`, org.allowedIpPool.map(i => i.ip), `\n`);
+
     res.status(200).json({
       success: true,
       message: `IP '${cleanIp}' whitelisted for ${org.name}.`,

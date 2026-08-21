@@ -29,17 +29,25 @@ export const verifyExamIp = async (req, res) => {
   try {
     const { id } = req.params;
     const tenantId = req.tenantId || req.headers["x-tenant-id"] || "svck";
+    const cleanOrgId = tenantId.toString().toLowerCase().trim();
     const candidateIps = getCandidateIps(req);
-    const clientIp = candidateIps[0] || "127.0.0.1";
+    const primaryIp = candidateIps.find(ip => ip !== '127.0.0.1') || candidateIps[0] || '127.0.0.1';
     const { Exam } = req.tenantModels || {};
 
     let isRestrictionEnabled = true;
     let allowedPool = [];
 
-    // 1. Check Organization-level Allowed IP Pool from wb_super_admin
+    // 1. Fetch Org-wise Whitelisted IP Pool directly from MongoDB (wb_super_admin -> organizations)
     try {
       const { OrganizationRegistry } = getSuperAdminDb();
-      const masterOrg = await OrganizationRegistry.findOne({ orgId: tenantId.toLowerCase().trim() });
+      const masterOrg = await OrganizationRegistry.findOne({
+        $or: [
+          { orgId: cleanOrgId },
+          { code: cleanOrgId.toUpperCase() },
+          { dbName: `wb_org_${cleanOrgId}` }
+        ]
+      });
+
       if (masterOrg) {
         if (masterOrg.isIpRestrictionEnabled === false) {
           isRestrictionEnabled = false;
@@ -48,9 +56,11 @@ export const verifyExamIp = async (req, res) => {
           allowedPool.push(...masterOrg.allowedIpPool);
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("Error querying Org IP Pool from MongoDB:", e);
+    }
 
-    // 2. Check Specific Exam-level Allowed IP Pool
+    // 2. Also check Exam-level IP Pool from tenant MongoDB if present
     if (Exam) {
       const examDoc = await findExamByIdOrCode(Exam, id);
       if (examDoc) {
@@ -63,36 +73,57 @@ export const verifyExamIp = async (req, res) => {
       }
     }
 
-    // If IP restriction is disabled for org/exam, allow access automatically
+    // If IP restriction is disabled for this organization, allow access
     if (!isRestrictionEnabled) {
       return res.status(200).json({
         success: true,
         accessGranted: true,
-        ip: clientIp,
+        ip: primaryIp,
         candidateIps,
         message: "IP restriction is currently disabled."
       });
     }
 
-    // Check if any candidate IP is in the whitelisted pool
+    // Strictly check if current IPv4 address is in the whitelisted IP Pool from MongoDB
     const accessGranted = isIpInPool(candidateIps, allowedPool);
+
+    const dbIpList = allowedPool.map(item => (typeof item === 'string' ? item : item.ip));
+
+    console.log(`\n============== 🔍 IP LOCKDOWN VERIFICATION VERDICT ==============`);
+    console.log(`🏢 Organization ID         : ${cleanOrgId.toUpperCase()}`);
+    console.log(`💻 Fetched System IPv4s    :`, candidateIps);
+    console.log(`🗄️ MongoDB Whitelisted IPs :`, dbIpList);
+    console.log(`🛡️ Lockdown Enforcement    : ${isRestrictionEnabled ? 'ACTIVE (ENABLED)' : 'DISABLED'}`);
+    console.log(`🎯 Verification Result     : ${accessGranted ? '✅ ACCESS GRANTED (MATCH FOUND)' : '❌ ACCESS DENIED (NO MATCH FOUND)'}`);
+    console.log(`=================================================================\n`);
+    
+    // Find matching IP item for display
+    const matchedIpItem = allowedPool.find(item => {
+      const rawEntry = (typeof item === 'string' ? item : item.ip || '').trim();
+      return candidateIps.some(cIp => cIp === rawEntry || rawEntry === '*');
+    });
+
+    const displayIp = (typeof matchedIpItem === 'object' && matchedIpItem?.ip) ? matchedIpItem.ip : primaryIp;
 
     if (accessGranted) {
       return res.status(200).json({
         success: true,
         accessGranted: true,
-        ip: clientIp,
+        ip: displayIp,
         candidateIps,
-        message: "Verified College Lab Computer Access Granted"
+        dbIpList,
+        message: `Verified College Lab System (${displayIp}) Access Granted`
       });
     }
 
     return res.status(200).json({
       success: true,
       accessGranted: false,
-      ip: clientIp,
+      ip: primaryIp,
       candidateIps,
-      message: `Unauthorized Location / System IP (${clientIp}). Examinations are strictly locked to whitelisted college lab computers.`
+      dbIpList,
+      allowedPoolCount: allowedPool.length,
+      message: `Unauthorized System IP (${primaryIp}). Your IPv4 address is not registered in ${cleanOrgId.toUpperCase()}'s Whitelisted Lab IP Pool.`
     });
   } catch (error) {
     console.error("Error verifying exam IP:", error);

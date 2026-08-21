@@ -1,19 +1,45 @@
+import os from 'os';
+
 /**
- * Extracts all candidate IPv4/IPv6 client IPs from Express request headers, socket, body, and query
+ * Returns all local IPv4 network interface addresses on the host system
+ */
+export const getSystemNetworkIps = () => {
+  const ips = [];
+  try {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const net of interfaces[name] || []) {
+        if (net.family === 'IPv4' && !net.internal) {
+          ips.push(net.address);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error fetching OS network interfaces:', e.message);
+  }
+  return ips;
+};
+
+/**
+ * Extracts all candidate IPv4/IPv6 client IPs from Express request headers, socket, body, query, and network adapters
  */
 export const getCandidateIps = (req) => {
   const ips = new Set();
 
-  if (req.body && req.body.clientIp) ips.add(req.body.clientIp.trim());
-  if (req.query && req.query.clientIp) ips.add(req.query.clientIp.trim());
-  if (req.headers['x-client-ip']) ips.add(req.headers['x-client-ip'].trim());
+  if (req && req.body && req.body.clientIp) ips.add(req.body.clientIp.trim());
+  if (req && req.query && req.query.clientIp) ips.add(req.query.clientIp.trim());
+  if (req && req.headers && req.headers['x-client-ip']) ips.add(req.headers['x-client-ip'].trim());
 
-  if (req.headers['x-forwarded-for']) {
+  if (req && req.headers && req.headers['x-forwarded-for']) {
     req.headers['x-forwarded-for'].split(',').forEach(s => ips.add(s.trim()));
   }
-  if (req.headers['x-real-ip']) ips.add(req.headers['x-real-ip'].trim());
-  if (req.socket && req.socket.remoteAddress) ips.add(req.socket.remoteAddress.trim());
-  if (req.ip) ips.add(req.ip.trim());
+  if (req && req.headers && req.headers['x-real-ip']) ips.add(req.headers['x-real-ip'].trim());
+  if (req && req.socket && req.socket.remoteAddress) ips.add(req.socket.remoteAddress.trim());
+  if (req && req.socket && req.socket.localAddress) ips.add(req.socket.localAddress.trim());
+  if (req && req.ip) ips.add(req.ip.trim());
+
+  // Include host OS network interface IPv4 addresses
+  getSystemNetworkIps().forEach(ip => ips.add(ip));
 
   const cleaned = [];
   ips.forEach(raw => {
@@ -28,11 +54,12 @@ export const getCandidateIps = (req) => {
 
 export const getClientIp = (req) => {
   const candidates = getCandidateIps(req);
-  return candidates[0] || '127.0.0.1';
+  const nonLocal = candidates.find(c => c !== '127.0.0.1');
+  return nonLocal || candidates[0] || '127.0.0.1';
 };
 
 /**
- * Strictly checks if ANY candidate request IP matches an entry in the allowed IP pool.
+ * Strictly checks if ANY candidate request IP matches an entry in the MongoDB allowed IP pool.
  * Supports exact IPs (192.168.29.1), wildcards (192.168.29.*), and CIDR/ranges.
  */
 export const isIpInPool = (candidateIps, allowedPool = []) => {
@@ -84,5 +111,4 @@ const ipToLong = (ip) => {
   return parts.reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
 };
 
-export default { getClientIp, getCandidateIps, isIpInPool };
-
+export default { getClientIp, getCandidateIps, getSystemNetworkIps, isIpInPool };
