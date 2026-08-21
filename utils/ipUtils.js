@@ -1,71 +1,80 @@
 /**
- * Utility to extract clean IPv4/IPv6 client IP from Express request
+ * Extracts all candidate IPv4/IPv6 client IPs from Express request headers, socket, body, and query
  */
-export const getClientIp = (req) => {
-  let ip = '';
+export const getCandidateIps = (req) => {
+  const ips = new Set();
+
+  if (req.body && req.body.clientIp) ips.add(req.body.clientIp.trim());
+  if (req.query && req.query.clientIp) ips.add(req.query.clientIp.trim());
+  if (req.headers['x-client-ip']) ips.add(req.headers['x-client-ip'].trim());
+
   if (req.headers['x-forwarded-for']) {
-    ip = req.headers['x-forwarded-for'].split(',')[0].trim();
-  } else if (req.headers['x-real-ip']) {
-    ip = req.headers['x-real-ip'].trim();
-  } else if (req.socket && req.socket.remoteAddress) {
-    ip = req.socket.remoteAddress;
-  } else if (req.ip) {
-    ip = req.ip;
+    req.headers['x-forwarded-for'].split(',').forEach(s => ips.add(s.trim()));
   }
+  if (req.headers['x-real-ip']) ips.add(req.headers['x-real-ip'].trim());
+  if (req.socket && req.socket.remoteAddress) ips.add(req.socket.remoteAddress.trim());
+  if (req.ip) ips.add(req.ip.trim());
 
-  // Strip IPv6 prefix if mapped IPv4 (e.g. ::ffff:192.168.1.100 -> 192.168.1.100)
-  if (ip && ip.startsWith('::ffff:')) {
-    ip = ip.substring(7);
-  }
+  const cleaned = [];
+  ips.forEach(raw => {
+    let ip = raw;
+    if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+    if (ip === '::1') ip = '127.0.0.1';
+    if (ip) cleaned.push(ip);
+  });
 
-  if (ip === '::1') {
-    ip = '127.0.0.1';
-  }
+  return cleaned.length > 0 ? cleaned : ['127.0.0.1'];
+};
 
-  return ip || '127.0.0.1';
+export const getClientIp = (req) => {
+  const candidates = getCandidateIps(req);
+  return candidates[0] || '127.0.0.1';
 };
 
 /**
- * Strictly checks if a target IP matches any entry in the allowed IP pool.
- * NO DEFAULT BYPASSES: Every IP must explicitly match an entry in allowedPool.
+ * Strictly checks if ANY candidate request IP matches an entry in the allowed IP pool.
+ * Supports exact IPs (192.168.29.1), wildcards (192.168.29.*), and CIDR/ranges.
  */
-export const isIpInPool = (clientIp, allowedPool = []) => {
-  // If pool is empty or invalid, NO ONE passes
+export const isIpInPool = (candidateIps, allowedPool = []) => {
   if (!allowedPool || allowedPool.length === 0) return false;
 
-  const cleanClient = (clientIp || '').trim();
-  if (!cleanClient) return false;
+  const targetList = Array.isArray(candidateIps) ? candidateIps : [candidateIps];
 
-  return allowedPool.some(item => {
-    const rawEntry = (typeof item === 'string' ? item : item.ip || '').trim();
-    if (!rawEntry) return false;
+  return targetList.some(clientIp => {
+    const cleanClient = (clientIp || '').trim();
+    if (!cleanClient) return false;
 
-    // Allow all wildcard entry
-    if (rawEntry === '*' || rawEntry === '0.0.0.0/0') return true;
+    return allowedPool.some(item => {
+      const rawEntry = (typeof item === 'string' ? item : item.ip || '').trim();
+      if (!rawEntry) return false;
 
-    // Exact match
-    if (rawEntry === cleanClient) return true;
+      // Allow all wildcard entry
+      if (rawEntry === '*' || rawEntry === '0.0.0.0/0') return true;
 
-    // Wildcard match e.g. 192.168.1.*
-    if (rawEntry.includes('*')) {
-      const regexStr = '^' + rawEntry.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
-      const regex = new RegExp(regexStr);
-      if (regex.test(cleanClient)) return true;
-    }
+      // Exact match e.g. 192.168.29.1
+      if (rawEntry === cleanClient) return true;
 
-    // Range match e.g. 192.168.1.10-192.168.1.100
-    if (rawEntry.includes('-')) {
-      const [startStr, endStr] = rawEntry.split('-').map(s => s.trim());
-      const clientNum = ipToLong(cleanClient);
-      const startNum = ipToLong(startStr);
-      const endNum = ipToLong(endStr);
-
-      if (clientNum !== null && startNum !== null && endNum !== null) {
-        if (clientNum >= startNum && clientNum <= endNum) return true;
+      // Wildcard match e.g. 192.168.29.*
+      if (rawEntry.includes('*')) {
+        const regexStr = '^' + rawEntry.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
+        const regex = new RegExp(regexStr);
+        if (regex.test(cleanClient)) return true;
       }
-    }
 
-    return false;
+      // Range match e.g. 192.168.29.1-192.168.29.254
+      if (rawEntry.includes('-')) {
+        const [startStr, endStr] = rawEntry.split('-').map(s => s.trim());
+        const clientNum = ipToLong(cleanClient);
+        const startNum = ipToLong(startStr);
+        const endNum = ipToLong(endStr);
+
+        if (clientNum !== null && startNum !== null && endNum !== null) {
+          if (clientNum >= startNum && clientNum <= endNum) return true;
+        }
+      }
+
+      return false;
+    });
   });
 };
 
@@ -75,5 +84,5 @@ const ipToLong = (ip) => {
   return parts.reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
 };
 
-export default { getClientIp, isIpInPool };
+export default { getClientIp, getCandidateIps, isIpInPool };
 

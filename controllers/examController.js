@@ -7,17 +7,18 @@
 
 import mongoose from "mongoose";
 import resolveStudentBranch from "../utils/branchResolver.js";
-import { getClientIp, isIpInPool } from "../utils/ipUtils.js";
+import { getClientIp, getCandidateIps, isIpInPool } from "../utils/ipUtils.js";
 import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
 
 /**
  * Detect client system IP
  */
 export const getSystemIp = async (req, res) => {
-  const clientIp = getClientIp(req);
+  const candidateIps = getCandidateIps(req);
   res.status(200).json({
     success: true,
-    ip: clientIp
+    ip: candidateIps[0] || '127.0.0.1',
+    candidateIps
   });
 };
 
@@ -28,7 +29,8 @@ export const verifyExamIp = async (req, res) => {
   try {
     const { id } = req.params;
     const tenantId = req.tenantId || req.headers["x-tenant-id"] || "svck";
-    const clientIp = getClientIp(req);
+    const candidateIps = getCandidateIps(req);
+    const clientIp = candidateIps[0] || "127.0.0.1";
     const { Exam } = req.tenantModels || {};
 
     let isRestrictionEnabled = true;
@@ -67,18 +69,20 @@ export const verifyExamIp = async (req, res) => {
         success: true,
         accessGranted: true,
         ip: clientIp,
+        candidateIps,
         message: "IP restriction is currently disabled."
       });
     }
 
-    // Check if clientIp is in the whitelisted pool
-    const accessGranted = isIpInPool(clientIp, allowedPool);
+    // Check if any candidate IP is in the whitelisted pool
+    const accessGranted = isIpInPool(candidateIps, allowedPool);
 
     if (accessGranted) {
       return res.status(200).json({
         success: true,
         accessGranted: true,
         ip: clientIp,
+        candidateIps,
         message: "Verified College Lab Computer Access Granted"
       });
     }
@@ -87,6 +91,7 @@ export const verifyExamIp = async (req, res) => {
       success: true,
       accessGranted: false,
       ip: clientIp,
+      candidateIps,
       message: `Unauthorized Location / System IP (${clientIp}). Examinations are strictly locked to whitelisted college lab computers.`
     });
   } catch (error) {
