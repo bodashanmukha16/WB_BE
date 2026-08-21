@@ -493,7 +493,8 @@ export const getOrgIpPool = async (req, res) => {
         { dbName: `wb_org_${cleanOrgId}` },
         { dbName: cleanOrgId }
       ]
-    }) || await OrganizationRegistry.findOne({});
+    }).lean() || await OrganizationRegistry.findOne({}).lean();
+
     if (!org) {
       return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
     }
@@ -518,7 +519,7 @@ export const addOrgIpPoolEntry = async (req, res) => {
     const cleanOrgId = orgId.toLowerCase().trim();
     const { OrganizationRegistry } = getSuperAdminDb();
     const orgRegex = new RegExp(`^${cleanOrgId}$`, 'i');
-    const org = await OrganizationRegistry.findOne({
+    let org = await OrganizationRegistry.findOne({
       $or: [
         { orgId: orgRegex },
         { code: orgRegex },
@@ -526,33 +527,37 @@ export const addOrgIpPoolEntry = async (req, res) => {
         { dbName: cleanOrgId }
       ]
     }) || await OrganizationRegistry.findOne({});
+
     if (!org) {
       return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
     }
 
-    org.allowedIpPool = org.allowedIpPool || [];
     const cleanIp = ip.trim();
-    
-    // Check if IP already exists
-    const exists = org.allowedIpPool.some(item => item.ip === cleanIp);
+    const currentPool = org.allowedIpPool || [];
+    const exists = currentPool.some(item => item.ip === cleanIp);
+
     if (!exists) {
-      org.allowedIpPool.push({
-        ip: cleanIp,
-        label: label || 'College Lab System',
-        addedAt: new Date()
-      });
-      await org.save();
+      const newPool = [
+        ...currentPool,
+        { ip: cleanIp, label: label || 'College Lab System', addedAt: new Date() }
+      ];
+      await OrganizationRegistry.updateOne(
+        { _id: org._id },
+        { $set: { allowedIpPool: newPool, updatedAt: new Date() } }
+      );
+      org.allowedIpPool = newPool;
     }
 
-    console.log(`\n➕ MongoDB UPDATE: Added Whitelisted IP '${cleanIp}' for Org '${org.orgId.toUpperCase()}'.`);
-    console.log(`🗄️ Updated MongoDB Allowed IP Pool:`, org.allowedIpPool.map(i => i.ip), `\n`);
+    console.log(`\n➕ MongoDB UPDATE SUCCESS: Whitelisted IP '${cleanIp}' saved for Org '${org.orgId.toUpperCase()}'.`);
+    console.log(`🗄️ Current MongoDB Allowed IP Pool:`, org.allowedIpPool.map(i => i.ip), `\n`);
 
     res.status(200).json({
       success: true,
       message: `IP '${cleanIp}' whitelisted for ${org.name}.`,
-      allowedIpPool: org.allowedIpPool
+      allowedIpPool: org.allowedIpPool || []
     });
   } catch (error) {
+    console.error("addOrgIpPoolEntry error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -571,17 +576,24 @@ export const removeOrgIpPoolEntry = async (req, res) => {
         { dbName: cleanOrgId }
       ]
     }) || await OrganizationRegistry.findOne({});
+
     if (!org) {
       return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
     }
 
-    org.allowedIpPool = (org.allowedIpPool || []).filter(item => item._id.toString() !== ipId && item.ip !== ipId);
-    await org.save();
+    const updatedPool = (org.allowedIpPool || []).filter(
+      item => item._id?.toString() !== ipId && item.ip !== ipId
+    );
+
+    await OrganizationRegistry.updateOne(
+      { _id: org._id },
+      { $set: { allowedIpPool: updatedPool, updatedAt: new Date() } }
+    );
 
     res.status(200).json({
       success: true,
       message: `IP removed from whitelist.`,
-      allowedIpPool: org.allowedIpPool
+      allowedIpPool: updatedPool
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -603,17 +615,23 @@ export const toggleOrgIpRestriction = async (req, res) => {
         { dbName: cleanOrgId }
       ]
     }) || await OrganizationRegistry.findOne({});
+
     if (!org) {
       return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
     }
 
-    org.isIpRestrictionEnabled = Boolean(isIpRestrictionEnabled);
-    await org.save();
+    const newStatus = Boolean(isIpRestrictionEnabled);
+    await OrganizationRegistry.updateOne(
+      { _id: org._id },
+      { $set: { isIpRestrictionEnabled: newStatus, updatedAt: new Date() } }
+    );
+
+    console.log(`\n🔒 MongoDB UPDATE SUCCESS: Lockdown status for Org '${org.orgId.toUpperCase()}' set to ${newStatus ? 'ENABLED' : 'DISABLED'}.\n`);
 
     res.status(200).json({
       success: true,
-      message: `IP Restriction set to ${org.isIpRestrictionEnabled ? 'ENABLED' : 'DISABLED'} for ${org.name}.`,
-      isIpRestrictionEnabled: org.isIpRestrictionEnabled
+      message: `IP Restriction set to ${newStatus ? 'ENABLED' : 'DISABLED'} for ${org.name}.`,
+      isIpRestrictionEnabled: newStatus
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
