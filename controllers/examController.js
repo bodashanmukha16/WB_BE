@@ -83,8 +83,8 @@ export const verifyExamIp = async (req, res) => {
       });
     }
 
-    return res.status(403).json({
-      success: false,
+    return res.status(200).json({
+      success: true,
       accessGranted: false,
       ip: clientIp,
       message: `Unauthorized Location / System IP (${clientIp}). Examinations are strictly locked to whitelisted college lab computers.`

@@ -18,37 +18,29 @@ export const getClientIp = (req) => {
     ip = ip.substring(7);
   }
 
-  // Handle localhost IPv6 loopback
-  if (ip === '::1' || ip === '127.0.0.1' || ip === 'localhost') {
-    return '127.0.0.1';
+  if (ip === '::1') {
+    ip = '127.0.0.1';
   }
 
   return ip || '127.0.0.1';
 };
 
 /**
- * Checks if a target IP matches any entry in the allowed IP pool.
- * Allowed entries can be:
- * 1) Exact IP: "192.168.1.50"
- * 2) Wildcard IP: "192.168.1.*"
- * 3) Localhost: "127.0.0.1" / "localhost"
- * 4) Range: "192.168.1.10-192.168.1.100"
+ * Strictly checks if a target IP matches any entry in the allowed IP pool.
+ * NO DEFAULT BYPASSES: Every IP must explicitly match an entry in allowedPool.
  */
 export const isIpInPool = (clientIp, allowedPool = []) => {
-  if (!allowedPool || allowedPool.length === 0) return true; // If pool is empty, default open
+  // If pool is empty or invalid, NO ONE passes
+  if (!allowedPool || allowedPool.length === 0) return false;
 
   const cleanClient = (clientIp || '').trim();
-
-  // Allow localhost / dev loopback IPs automatically
-  if (cleanClient === '127.0.0.1' || cleanClient === 'localhost' || cleanClient === '::1') {
-    return true;
-  }
+  if (!cleanClient) return false;
 
   return allowedPool.some(item => {
     const rawEntry = (typeof item === 'string' ? item : item.ip || '').trim();
     if (!rawEntry) return false;
 
-    // Allow all entry
+    // Allow all wildcard entry
     if (rawEntry === '*' || rawEntry === '0.0.0.0/0') return true;
 
     // Exact match
@@ -84,3 +76,4 @@ const ipToLong = (ip) => {
 };
 
 export default { getClientIp, isIpInPool };
+
