@@ -8,7 +8,8 @@ import {
   getAllOrganizations,
   getOrgDetails,
   onboardOrganization,
-  updateOrgValidity
+  updateOrgValidity,
+  deleteOrganization
 } from '../controllers/orgManagementController.js';
 import {
   getDatabasesAndCollections,
@@ -31,6 +32,7 @@ router.get('/organizations', superAdminAuthMiddleware, getAllOrganizations);
 router.get('/organizations/:orgId', superAdminAuthMiddleware, getOrgDetails);
 router.post('/organizations/onboard', superAdminAuthMiddleware, onboardOrganization);
 router.put('/organizations/:orgId/validity', superAdminAuthMiddleware, updateOrgValidity);
+router.delete('/organizations/:orgId', superAdminAuthMiddleware, deleteOrganization);
 
 // --- UI Database CRUD Studio Routes ---
 router.get('/crud/databases', superAdminAuthMiddleware, getDatabasesAndCollections);

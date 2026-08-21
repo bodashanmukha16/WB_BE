@@ -392,6 +392,123 @@ export const updateOrgValidity = async (req, res) => {
 };
 
 /**
+ * 7. Delete Organization (Removes from registry, optionally drops tenant DB, cleans .env files)
+ */
+export const deleteOrganization = async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const { dropDatabase = false } = req.body || {};
+
+    const cleanOrgId = orgId.toLowerCase().trim();
+    const { OrganizationRegistry } = getSuperAdminDb();
+    const org = await OrganizationRegistry.findOne({ orgId: cleanOrgId });
+
+    if (!org) {
+      return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
+    }
+
+    const code = org.code;
+    const dbName = org.dbName || `wb_org_${cleanOrgId}`;
+
+    // 1. Delete from Master Organization Registry (wb_super_admin)
+    await OrganizationRegistry.deleteOne({ orgId: cleanOrgId });
+
+    // 2. Optionally drop tenant MongoDB database
+    let dbDropped = false;
+    if (dropDatabase) {
+      try {
+        const tenantConn = mongoose.connection.useDb(dbName);
+        await tenantConn.dropDatabase();
+        dbDropped = true;
+      } catch (dbErr) {
+        console.warn(`Could not drop database ${dbName}:`, dbErr.message);
+      }
+    }
+
+    // 3. Remove entry from .env files (BE/.env and FE/FE_WB/.env)
+    removeFromEnvFiles(code, cleanOrgId);
+
+    res.status(200).json({
+      success: true,
+      message: `Organization '${org.name}' (${cleanOrgId}) was permanently deleted.${dbDropped ? ' Tenant database dropped.' : ''}`,
+      orgId: cleanOrgId
+    });
+  } catch (error) {
+    console.error('deleteOrganization error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Helper to remove org from .env files
+ */
+export const removeFromEnvFiles = (code, orgId) => {
+  try {
+    const beEnvPath = path.resolve(process.cwd(), '.env');
+    const feEnvPath = path.resolve(process.cwd(), '../FE/FE_WB/.env');
+
+    removeSingleEnvFile(beEnvPath, code, orgId, false);
+    if (fs.existsSync(feEnvPath)) {
+      removeSingleEnvFile(feEnvPath, code, orgId, true);
+    }
+  } catch (err) {
+    console.warn('Env removal error:', err.message);
+  }
+};
+
+const removeSingleEnvFile = (filePath, code, orgId, isVite = false) => {
+  try {
+    if (!fs.existsSync(filePath)) return;
+    let content = fs.readFileSync(filePath, 'utf-8');
+
+    const codeKey = isVite ? 'VITE_COLLEGE_CODES' : 'COLLEGE_CODES';
+    const detailsKey = isVite ? 'VITE_ORG_DETAILS' : 'ORG_DETAILS';
+
+    let existingCodesMap = {};
+    const codeMatch = content.match(new RegExp(`${codeKey}=(.*)`));
+    if (codeMatch && codeMatch[1]) {
+      try { existingCodesMap = JSON.parse(codeMatch[1].trim()); } catch (e) {}
+    }
+
+    if (code && existingCodesMap[code]) {
+      delete existingCodesMap[code];
+    }
+    for (const [k, v] of Object.entries(existingCodesMap)) {
+      if (v === orgId) {
+        delete existingCodesMap[k];
+      }
+    }
+
+    let existingDetailsMap = {};
+    const detailsMatch = content.match(new RegExp(`${detailsKey}=(.*)`));
+    if (detailsMatch && detailsMatch[1]) {
+      try { existingDetailsMap = JSON.parse(detailsMatch[1].trim()); } catch (e) {}
+    }
+    if (existingDetailsMap[orgId]) {
+      delete existingDetailsMap[orgId];
+    }
+
+    const newCodeLine = `${codeKey}=${JSON.stringify(existingCodesMap)}`;
+    const newDetailsLine = `${detailsKey}=${JSON.stringify(existingDetailsMap)}`;
+
+    if (content.includes(codeKey)) {
+      content = content.replace(new RegExp(`${codeKey}=.*`), newCodeLine);
+    }
+    if (content.includes(detailsKey)) {
+      content = content.replace(new RegExp(`${detailsKey}=.*`), newDetailsLine);
+    }
+
+    fs.writeFileSync(filePath, content, 'utf-8');
+
+    // Update process.env in memory
+    process.env[codeKey] = JSON.stringify(existingCodesMap);
+    process.env[detailsKey] = JSON.stringify(existingDetailsMap);
+  } catch (err) {
+    console.warn(`Could not update ${filePath} for removal:`, err.message);
+  }
+};
+
+/**
  * Helper to sync .env files
  */
 const syncEnvFiles = (code, orgId, name, logo) => {
@@ -454,3 +571,4 @@ const updateSingleEnvFile = (filePath, code, orgId, name, logo, isVite = false) 
     console.warn(`Could not update ${filePath}:`, err.message);
   }
 };
+

@@ -32,15 +32,19 @@ export const initSuperAdminDatabase = async () => {
     // 2. Sync Existing Organizations from process.env (COLLEGE_CODES & ORG_DETAILS)
     let envCodes = {};
     let envDetails = {};
+    let isEnvDetailsSet = false;
     try {
       if (process.env.COLLEGE_CODES) envCodes = JSON.parse(process.env.COLLEGE_CODES);
-      if (process.env.ORG_DETAILS) envDetails = JSON.parse(process.env.ORG_DETAILS);
+      if (process.env.ORG_DETAILS) {
+        envDetails = JSON.parse(process.env.ORG_DETAILS);
+        isEnvDetailsSet = true;
+      }
     } catch (e) {
       console.warn('⚠️ Could not parse env college codes/details:', e.message);
     }
 
-    // Default orgs fallback if env missing
-    if (Object.keys(envDetails).length === 0) {
+    // Default orgs fallback ONLY if ORG_DETAILS key was never defined in .env
+    if (!isEnvDetailsSet && Object.keys(envDetails).length === 0) {
       envDetails = {
         aits: { name: 'AITS Rajampet', code: 'AITS', logo: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=150&auto=format&fit=crop&q=80' },
         svck: { name: 'SV College of Engineering', code: 'KH', logo: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=150&auto=format&fit=crop&q=80' }
