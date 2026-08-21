@@ -9,7 +9,8 @@ export const getSystemNetworkIps = () => {
     const interfaces = os.networkInterfaces();
     for (const name of Object.keys(interfaces)) {
       for (const net of interfaces[name] || []) {
-        if (net.family === 'IPv4' && !net.internal) {
+        const familyStr = String(net.family);
+        if ((familyStr === '4' || familyStr === 'IPv4') && !net.internal) {
           ips.push(net.address);
         }
       }
@@ -54,7 +55,7 @@ export const getCandidateIps = (req) => {
 
 export const getClientIp = (req) => {
   const candidates = getCandidateIps(req);
-  const nonLocal = candidates.find(c => c !== '127.0.0.1');
+  const nonLocal = candidates.find(c => c !== '127.0.0.1' && c !== 'localhost');
   return nonLocal || candidates[0] || '127.0.0.1';
 };
 

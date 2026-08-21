@@ -483,8 +483,15 @@ export const deleteOrganization = async (req, res) => {
 export const getOrgIpPool = async (req, res) => {
   try {
     const { orgId } = req.params;
+    const cleanOrgId = orgId.toLowerCase().trim();
     const { OrganizationRegistry } = getSuperAdminDb();
-    const org = await OrganizationRegistry.findOne({ orgId: orgId.toLowerCase().trim() });
+    const org = await OrganizationRegistry.findOne({
+      $or: [
+        { orgId: cleanOrgId },
+        { code: cleanOrgId.toUpperCase() },
+        { dbName: `wb_org_${cleanOrgId}` }
+      ]
+    });
     if (!org) {
       return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
     }
@@ -506,8 +513,15 @@ export const addOrgIpPoolEntry = async (req, res) => {
     if (!ip) {
       return res.status(400).json({ success: false, message: 'IP address or CIDR entry is required.' });
     }
+    const cleanOrgId = orgId.toLowerCase().trim();
     const { OrganizationRegistry } = getSuperAdminDb();
-    const org = await OrganizationRegistry.findOne({ orgId: orgId.toLowerCase().trim() });
+    const org = await OrganizationRegistry.findOne({
+      $or: [
+        { orgId: cleanOrgId },
+        { code: cleanOrgId.toUpperCase() },
+        { dbName: `wb_org_${cleanOrgId}` }
+      ]
+    });
     if (!org) {
       return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
     }
@@ -542,8 +556,15 @@ export const addOrgIpPoolEntry = async (req, res) => {
 export const removeOrgIpPoolEntry = async (req, res) => {
   try {
     const { orgId, ipId } = req.params;
+    const cleanOrgId = orgId.toLowerCase().trim();
     const { OrganizationRegistry } = getSuperAdminDb();
-    const org = await OrganizationRegistry.findOne({ orgId: orgId.toLowerCase().trim() });
+    const org = await OrganizationRegistry.findOne({
+      $or: [
+        { orgId: cleanOrgId },
+        { code: cleanOrgId.toUpperCase() },
+        { dbName: `wb_org_${cleanOrgId}` }
+      ]
+    });
     if (!org) {
       return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
     }
@@ -565,8 +586,15 @@ export const toggleOrgIpRestriction = async (req, res) => {
   try {
     const { orgId } = req.params;
     const { isIpRestrictionEnabled } = req.body;
+    const cleanOrgId = orgId.toLowerCase().trim();
     const { OrganizationRegistry } = getSuperAdminDb();
-    const org = await OrganizationRegistry.findOne({ orgId: orgId.toLowerCase().trim() });
+    const org = await OrganizationRegistry.findOne({
+      $or: [
+        { orgId: cleanOrgId },
+        { code: cleanOrgId.toUpperCase() },
+        { dbName: `wb_org_${cleanOrgId}` }
+      ]
+    });
     if (!org) {
       return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
     }
