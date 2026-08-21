@@ -1,8 +1,44 @@
 import getSuperAdminDb from '../utils/superAdminDb.js';
 import getTenantContext from '../../utils/tenantConnectionManager.js';
+import { refreshCollegeCodeMap } from '../../utils/rollNumberResolver.js';
 import fs from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
+
+/**
+ * 1. Public Organizations Endpoint (Unauthenticated) for dynamic frontend resolution
+ */
+export const getPublicOrganizations = async (req, res) => {
+  try {
+    const { OrganizationRegistry } = getSuperAdminDb();
+    const orgs = await OrganizationRegistry.find({ status: 'active' }).sort({ name: 1 });
+
+    const collegeCodes = {};
+    const organizations = {};
+
+    for (const org of orgs) {
+      if (org.code && org.orgId) {
+        collegeCodes[org.code.toUpperCase()] = org.orgId.toLowerCase();
+      }
+      organizations[org.orgId.toLowerCase()] = {
+        name: org.name,
+        code: org.code.toUpperCase(),
+        logo: org.logo,
+        orgId: org.orgId.toLowerCase()
+      };
+    }
+
+    res.status(200).json({
+      success: true,
+      collegeCodes,
+      organizations,
+      rawList: orgs.map(o => ({ orgId: o.orgId, name: o.name, code: o.code, logo: o.logo }))
+    });
+  } catch (error) {
+    console.error('getPublicOrganizations error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 /**
  * 2. Get All Active & Registered Organizations Data + Dashboard Metrics
@@ -327,8 +363,8 @@ export const onboardOrganization = async (req, res) => {
       planType
     });
 
-    // 4. Update Environment Files (BE/.env and FE/FE_WB/.env)
-    syncEnvFiles(code, orgId, name, logoUrl);
+    // 4. Refresh in-memory Organization College Code Cache
+    await refreshCollegeCodeMap();
 
     res.status(201).json({
       success: true,
@@ -380,6 +416,8 @@ export const updateOrgValidity = async (req, res) => {
     org.updatedAt = new Date();
     await org.save();
 
+    await refreshCollegeCodeMap();
+
     res.status(200).json({
       success: true,
       message: `Validity & Access permissions updated for '${org.name}'.`,
@@ -392,7 +430,7 @@ export const updateOrgValidity = async (req, res) => {
 };
 
 /**
- * 7. Delete Organization (Removes from registry, optionally drops tenant DB, cleans .env files)
+ * 7. Delete Organization (Removes from registry and optionally drops tenant DB)
  */
 export const deleteOrganization = async (req, res) => {
   try {
@@ -425,8 +463,8 @@ export const deleteOrganization = async (req, res) => {
       }
     }
 
-    // 3. Remove entry from .env files (BE/.env and FE/FE_WB/.env)
-    removeFromEnvFiles(code, cleanOrgId);
+    // 3. Refresh in-memory cache
+    await refreshCollegeCodeMap();
 
     res.status(200).json({
       success: true,
@@ -439,136 +477,4 @@ export const deleteOrganization = async (req, res) => {
   }
 };
 
-/**
- * Helper to remove org from .env files
- */
-export const removeFromEnvFiles = (code, orgId) => {
-  try {
-    const beEnvPath = path.resolve(process.cwd(), '.env');
-    const feEnvPath = path.resolve(process.cwd(), '../FE/FE_WB/.env');
-
-    removeSingleEnvFile(beEnvPath, code, orgId, false);
-    if (fs.existsSync(feEnvPath)) {
-      removeSingleEnvFile(feEnvPath, code, orgId, true);
-    }
-  } catch (err) {
-    console.warn('Env removal error:', err.message);
-  }
-};
-
-const removeSingleEnvFile = (filePath, code, orgId, isVite = false) => {
-  try {
-    if (!fs.existsSync(filePath)) return;
-    let content = fs.readFileSync(filePath, 'utf-8');
-
-    const codeKey = isVite ? 'VITE_COLLEGE_CODES' : 'COLLEGE_CODES';
-    const detailsKey = isVite ? 'VITE_ORG_DETAILS' : 'ORG_DETAILS';
-
-    let existingCodesMap = {};
-    const codeMatch = content.match(new RegExp(`${codeKey}=(.*)`));
-    if (codeMatch && codeMatch[1]) {
-      try { existingCodesMap = JSON.parse(codeMatch[1].trim()); } catch (e) {}
-    }
-
-    if (code && existingCodesMap[code]) {
-      delete existingCodesMap[code];
-    }
-    for (const [k, v] of Object.entries(existingCodesMap)) {
-      if (v === orgId) {
-        delete existingCodesMap[k];
-      }
-    }
-
-    let existingDetailsMap = {};
-    const detailsMatch = content.match(new RegExp(`${detailsKey}=(.*)`));
-    if (detailsMatch && detailsMatch[1]) {
-      try { existingDetailsMap = JSON.parse(detailsMatch[1].trim()); } catch (e) {}
-    }
-    if (existingDetailsMap[orgId]) {
-      delete existingDetailsMap[orgId];
-    }
-
-    const newCodeLine = `${codeKey}=${JSON.stringify(existingCodesMap)}`;
-    const newDetailsLine = `${detailsKey}=${JSON.stringify(existingDetailsMap)}`;
-
-    if (content.includes(codeKey)) {
-      content = content.replace(new RegExp(`${codeKey}=.*`), newCodeLine);
-    }
-    if (content.includes(detailsKey)) {
-      content = content.replace(new RegExp(`${detailsKey}=.*`), newDetailsLine);
-    }
-
-    fs.writeFileSync(filePath, content, 'utf-8');
-
-    // Update process.env in memory
-    process.env[codeKey] = JSON.stringify(existingCodesMap);
-    process.env[detailsKey] = JSON.stringify(existingDetailsMap);
-  } catch (err) {
-    console.warn(`Could not update ${filePath} for removal:`, err.message);
-  }
-};
-
-/**
- * Helper to sync .env files
- */
-const syncEnvFiles = (code, orgId, name, logo) => {
-  try {
-    const beEnvPath = path.resolve(process.cwd(), '.env');
-    const feEnvPath = path.resolve(process.cwd(), '../FE/FE_WB/.env');
-
-    updateSingleEnvFile(beEnvPath, code, orgId, name, logo, false);
-    if (fs.existsSync(feEnvPath)) {
-      updateSingleEnvFile(feEnvPath, code, orgId, name, logo, true);
-    }
-  } catch (err) {
-    console.warn('Env sync error:', err.message);
-  }
-};
-
-const updateSingleEnvFile = (filePath, code, orgId, name, logo, isVite = false) => {
-  try {
-    if (!fs.existsSync(filePath)) return;
-    let content = fs.readFileSync(filePath, 'utf-8');
-
-    const codeKey = isVite ? 'VITE_COLLEGE_CODES' : 'COLLEGE_CODES';
-    const detailsKey = isVite ? 'VITE_ORG_DETAILS' : 'ORG_DETAILS';
-
-    let existingCodesMap = {};
-    const codeMatch = content.match(new RegExp(`${codeKey}=(.*)`));
-    if (codeMatch && codeMatch[1]) {
-      try { existingCodesMap = JSON.parse(codeMatch[1].trim()); } catch (e) {}
-    }
-    existingCodesMap[code] = orgId;
-
-    let existingDetailsMap = {};
-    const detailsMatch = content.match(new RegExp(`${detailsKey}=(.*)`));
-    if (detailsMatch && detailsMatch[1]) {
-      try { existingDetailsMap = JSON.parse(detailsMatch[1].trim()); } catch (e) {}
-    }
-    existingDetailsMap[orgId] = { name, code, logo };
-
-    const newCodeLine = `${codeKey}=${JSON.stringify(existingCodesMap)}`;
-    const newDetailsLine = `${detailsKey}=${JSON.stringify(existingDetailsMap)}`;
-
-    if (content.includes(codeKey)) {
-      content = content.replace(new RegExp(`${codeKey}=.*`), newCodeLine);
-    } else {
-      content += `\n${newCodeLine}`;
-    }
-
-    if (content.includes(detailsKey)) {
-      content = content.replace(new RegExp(`${detailsKey}=.*`), newDetailsLine);
-    } else {
-      content += `\n${newDetailsLine}`;
-    }
-
-    fs.writeFileSync(filePath, content, 'utf-8');
-
-    // Update in-memory process.env so Node server reflects changes instantly
-    process.env[codeKey] = JSON.stringify(existingCodesMap);
-    process.env[detailsKey] = JSON.stringify(existingDetailsMap);
-  } catch (err) {
-    console.warn(`Could not update ${filePath}:`, err.message);
-  }
-};
 

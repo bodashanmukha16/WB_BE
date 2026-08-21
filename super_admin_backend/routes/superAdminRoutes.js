@@ -5,6 +5,7 @@ import {
   updateSuperAdminPassword
 } from '../controllers/superAdminAuthController.js';
 import {
+  getPublicOrganizations,
   getAllOrganizations,
   getOrgDetails,
   onboardOrganization,
@@ -21,6 +22,9 @@ import {
 import superAdminAuthMiddleware from '../middleware/superAdminAuthMiddleware.js';
 
 const router = express.Router();
+
+// --- Public Unauthenticated Organization Config Route ---
+router.get('/public/organizations', getPublicOrganizations);
 
 // --- Auth Routes ---
 router.post('/login', superAdminLogin);

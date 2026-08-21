@@ -29,44 +29,29 @@ export const initSuperAdminDatabase = async () => {
       console.log('✅ Default Super Admin Account Seeded (user: superadmin, pass: SuperAdmin@123)');
     }
 
-    // 2. Sync Existing Organizations from process.env (COLLEGE_CODES & ORG_DETAILS)
-    let envCodes = {};
-    let envDetails = {};
-    let isEnvDetailsSet = false;
-    try {
-      if (process.env.COLLEGE_CODES) envCodes = JSON.parse(process.env.COLLEGE_CODES);
-      if (process.env.ORG_DETAILS) {
-        envDetails = JSON.parse(process.env.ORG_DETAILS);
-        isEnvDetailsSet = true;
-      }
-    } catch (e) {
-      console.warn('⚠️ Could not parse env college codes/details:', e.message);
-    }
+    // 2. Seed Default Initial Organizations if OrganizationRegistry is completely empty
+    const existingOrgCount = await OrganizationRegistry.countDocuments();
 
-    // Default orgs fallback ONLY if ORG_DETAILS key was never defined in .env
-    if (!isEnvDetailsSet && Object.keys(envDetails).length === 0) {
-      envDetails = {
-        aits: { name: 'AITS Rajampet', code: 'AITS', logo: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=150&auto=format&fit=crop&q=80' },
-        svck: { name: 'SV College of Engineering', code: 'KH', logo: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=150&auto=format&fit=crop&q=80' }
+    if (existingOrgCount === 0) {
+      console.log('🏛️ Initializing default institutions in OrganizationRegistry...');
+      const defaultOrgs = {
+        svck: { name: 'SV College of Engineering', code: 'KH', logo: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=150&auto=format&fit=crop&q=80' },
+        aits: { name: 'AITS Rajampet', code: 'AITS', logo: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=150&auto=format&fit=crop&q=80' }
       };
-    }
 
-    for (const [orgId, details] of Object.entries(envDetails)) {
-      const cleanOrgId = orgId.toLowerCase().trim();
-      const existingOrg = await OrganizationRegistry.findOne({ orgId: cleanOrgId });
-
-      if (!existingOrg) {
+      for (const [orgId, details] of Object.entries(defaultOrgs)) {
+        const cleanOrgId = orgId.toLowerCase().trim();
         await OrganizationRegistry.create({
           orgId: cleanOrgId,
-          name: details.name || cleanOrgId.toUpperCase(),
-          code: details.code || 'CODE',
-          logo: details.logo || 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=150&auto=format&fit=crop&q=80',
+          name: details.name,
+          code: details.code,
+          logo: details.logo,
           dbName: `wb_org_${cleanOrgId}`,
           status: 'active',
           validFrom: new Date(),
-          validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year default
+          validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
         });
-        console.log(`🏛️ Synced Organization Registry for: [${cleanOrgId}] -> DB [wb_org_${cleanOrgId}]`);
+        console.log(`🏛️ Initialized Organization Registry for: [${cleanOrgId}] -> DB [wb_org_${cleanOrgId}]`);
       }
     }
   } catch (error) {

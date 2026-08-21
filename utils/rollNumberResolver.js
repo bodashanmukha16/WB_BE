@@ -1,24 +1,53 @@
-import dotenv from "dotenv";
-dotenv.config();
+import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
+
+// In-memory cache for instant synchronous lookups across middleware & controllers
+let cachedCodeMap = { KH: "svck", A9: "aits", SITS: "s", JN: "jntu" };
+let isSyncing = false;
+let lastSyncTime = 0;
 
 /**
- * Dynamically parses process.env.COLLEGE_CODES JSON mapping.
- * Example: process.env.COLLEGE_CODES = '{"KH":"svck","A9":"aits","SITS":"s"}'
+ * Asynchronously refreshes the college code map directly from MongoDB OrganizationRegistry.
+ */
+export const refreshCollegeCodeMap = async () => {
+  try {
+    const { OrganizationRegistry } = getSuperAdminDb();
+    const orgs = await OrganizationRegistry.find({ status: "active" });
+    if (orgs && orgs.length > 0) {
+      const newMap = {};
+      for (const org of orgs) {
+        if (org.code && org.orgId) {
+          newMap[org.code.toUpperCase()] = org.orgId.toLowerCase();
+        }
+      }
+      cachedCodeMap = newMap;
+      lastSyncTime = Date.now();
+    }
+  } catch (err) {
+    // Fallback to process.env if MongoDB connection is not ready
+    try {
+      if (process.env.COLLEGE_CODES) {
+        cachedCodeMap = JSON.parse(process.env.COLLEGE_CODES);
+      }
+    } catch (e) {}
+  }
+  return cachedCodeMap;
+};
+
+/**
+ * Synchronously returns current college code map.
+ * Triggers background refresh if cache is older than 30 seconds.
  */
 export const getCollegeCodeMap = () => {
-  try {
-    if (process.env.COLLEGE_CODES) {
-      return JSON.parse(process.env.COLLEGE_CODES);
-    }
-  } catch (e) {
-    console.error("Error parsing COLLEGE_CODES from process.env:", e.message);
+  if (Date.now() - lastSyncTime > 30000 && !isSyncing) {
+    isSyncing = true;
+    refreshCollegeCodeMap().finally(() => { isSyncing = false; });
   }
-  return {};
+  return cachedCodeMap;
 };
 
 /**
  * Resolves organization ID dynamically from student roll number or email
- * strictly using process.env.COLLEGE_CODES mapping with ZERO hardcoded org IDs.
+ * using MongoDB organization registry with zero static .env dependency.
  */
 export const resolveOrgFromRollNumber = (input = "") => {
   const codeMap = getCollegeCodeMap();
@@ -28,7 +57,7 @@ export const resolveOrgFromRollNumber = (input = "") => {
   const str = input.toString().trim().toUpperCase();
   const lowerStr = str.toLowerCase();
 
-  // 1. Scan configured codes and orgIds strictly from .env mapping
+  // 1. Scan configured codes and orgIds strictly from active MongoDB registry
   for (const [code, orgId] of Object.entries(codeMap)) {
     const cleanCode = code.toUpperCase();
     const cleanOrgId = orgId.toLowerCase();
@@ -58,3 +87,4 @@ export const resolveOrgFromRollNumber = (input = "") => {
 };
 
 export default resolveOrgFromRollNumber;
+
