@@ -10,7 +10,11 @@ import {
   getOrgDetails,
   onboardOrganization,
   updateOrgValidity,
-  deleteOrganization
+  deleteOrganization,
+  getOrgIpPool,
+  addOrgIpPoolEntry,
+  removeOrgIpPoolEntry,
+  toggleOrgIpRestriction
 } from '../controllers/orgManagementController.js';
 import {
   getDatabasesAndCollections,
@@ -37,6 +41,12 @@ router.get('/organizations/:orgId', superAdminAuthMiddleware, getOrgDetails);
 router.post('/organizations/onboard', superAdminAuthMiddleware, onboardOrganization);
 router.put('/organizations/:orgId/validity', superAdminAuthMiddleware, updateOrgValidity);
 router.delete('/organizations/:orgId', superAdminAuthMiddleware, deleteOrganization);
+
+// --- IP Pool Management Routes ---
+router.get('/organizations/:orgId/ip-pool', superAdminAuthMiddleware, getOrgIpPool);
+router.post('/organizations/:orgId/ip-pool', superAdminAuthMiddleware, addOrgIpPoolEntry);
+router.delete('/organizations/:orgId/ip-pool/:ipId', superAdminAuthMiddleware, removeOrgIpPoolEntry);
+router.put('/organizations/:orgId/ip-toggle', superAdminAuthMiddleware, toggleOrgIpRestriction);
 
 // --- UI Database CRUD Studio Routes ---
 router.get('/crud/databases', superAdminAuthMiddleware, getDatabasesAndCollections);

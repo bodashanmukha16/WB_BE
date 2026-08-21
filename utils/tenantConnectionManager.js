@@ -82,6 +82,12 @@ export const getTenantContext = (tenantId = "default") => {
     totalMarks: { type: Number, default: 20 },
     passPercentage: { type: Number, default: 40 },
     status: { type: String, default: "active" },
+    isIpRestrictionEnabled: { type: Boolean, default: true },
+    allowedIpPool: [{
+      ip: { type: String, required: true },
+      label: { type: String, default: "College Lab Computer" },
+      addedAt: { type: Date, default: Date.now }
+    }],
     instructions: [{ type: String }],
     createdAt: { type: Date, default: Date.now }
   });

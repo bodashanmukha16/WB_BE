@@ -49,6 +49,15 @@ const organizationRegistrySchema = new mongoose.Schema({
     enum: ['Trial', 'Standard', 'Enterprise'],
     default: 'Enterprise'
   },
+  isIpRestrictionEnabled: {
+    type: Boolean,
+    default: true
+  },
+  allowedIpPool: [{
+    ip: { type: String, required: true },
+    label: { type: String, default: 'College Lab Computer' },
+    addedAt: { type: Date, default: Date.now }
+  }],
   createdAt: {
     type: Date,
     default: Date.now

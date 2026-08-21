@@ -7,6 +7,93 @@
 
 import mongoose from "mongoose";
 import resolveStudentBranch from "../utils/branchResolver.js";
+import { getClientIp, isIpInPool } from "../utils/ipUtils.js";
+import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
+
+/**
+ * Detect client system IP
+ */
+export const getSystemIp = async (req, res) => {
+  const clientIp = getClientIp(req);
+  res.status(200).json({
+    success: true,
+    ip: clientIp
+  });
+};
+
+/**
+ * Verify if incoming student request IP is whitelisted in Org / Exam Allowed IP Pool
+ */
+export const verifyExamIp = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const tenantId = req.tenantId || req.headers["x-tenant-id"] || "svck";
+    const clientIp = getClientIp(req);
+    const { Exam } = req.tenantModels || {};
+
+    let isRestrictionEnabled = true;
+    let allowedPool = [];
+
+    // 1. Check Organization-level Allowed IP Pool from wb_super_admin
+    try {
+      const { OrganizationRegistry } = getSuperAdminDb();
+      const masterOrg = await OrganizationRegistry.findOne({ orgId: tenantId.toLowerCase().trim() });
+      if (masterOrg) {
+        if (masterOrg.isIpRestrictionEnabled === false) {
+          isRestrictionEnabled = false;
+        }
+        if (masterOrg.allowedIpPool && masterOrg.allowedIpPool.length > 0) {
+          allowedPool.push(...masterOrg.allowedIpPool);
+        }
+      }
+    } catch (e) {}
+
+    // 2. Check Specific Exam-level Allowed IP Pool
+    if (Exam) {
+      const examDoc = await findExamByIdOrCode(Exam, id);
+      if (examDoc) {
+        if (examDoc.isIpRestrictionEnabled === false) {
+          isRestrictionEnabled = false;
+        }
+        if (examDoc.allowedIpPool && examDoc.allowedIpPool.length > 0) {
+          allowedPool.push(...examDoc.allowedIpPool);
+        }
+      }
+    }
+
+    // If IP restriction is disabled for org/exam, allow access automatically
+    if (!isRestrictionEnabled) {
+      return res.status(200).json({
+        success: true,
+        accessGranted: true,
+        ip: clientIp,
+        message: "IP restriction is currently disabled."
+      });
+    }
+
+    // Check if clientIp is in the whitelisted pool
+    const accessGranted = isIpInPool(clientIp, allowedPool);
+
+    if (accessGranted) {
+      return res.status(200).json({
+        success: true,
+        accessGranted: true,
+        ip: clientIp,
+        message: "Verified College Lab Computer Access Granted"
+      });
+    }
+
+    return res.status(403).json({
+      success: false,
+      accessGranted: false,
+      ip: clientIp,
+      message: `Unauthorized Location / System IP (${clientIp}). Examinations are strictly locked to whitelisted college lab computers.`
+    });
+  } catch (error) {
+    console.error("Error verifying exam IP:", error);
+    res.status(500).json({ success: false, message: "Server error verifying system IP" });
+  }
+};
 
 // Helper to safely find exam by ObjectId or String code/id
 const findExamByIdOrCode = async (Exam, id) => {

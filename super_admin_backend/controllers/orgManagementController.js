@@ -477,4 +477,108 @@ export const deleteOrganization = async (req, res) => {
   }
 };
 
+/**
+ * 8. Manage Organization Whitelisted IP Pool
+ */
+export const getOrgIpPool = async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const { OrganizationRegistry } = getSuperAdminDb();
+    const org = await OrganizationRegistry.findOne({ orgId: orgId.toLowerCase().trim() });
+    if (!org) {
+      return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
+    }
+    res.status(200).json({
+      success: true,
+      orgId: org.orgId,
+      isIpRestrictionEnabled: org.isIpRestrictionEnabled !== false,
+      allowedIpPool: org.allowedIpPool || []
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const addOrgIpPoolEntry = async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const { ip, label } = req.body;
+    if (!ip) {
+      return res.status(400).json({ success: false, message: 'IP address or CIDR entry is required.' });
+    }
+    const { OrganizationRegistry } = getSuperAdminDb();
+    const org = await OrganizationRegistry.findOne({ orgId: orgId.toLowerCase().trim() });
+    if (!org) {
+      return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
+    }
+
+    org.allowedIpPool = org.allowedIpPool || [];
+    const cleanIp = ip.trim();
+    
+    // Check if IP already exists
+    const exists = org.allowedIpPool.some(item => item.ip === cleanIp);
+    if (!exists) {
+      org.allowedIpPool.push({
+        ip: cleanIp,
+        label: label || 'College Lab System',
+        addedAt: new Date()
+      });
+      await org.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `IP '${cleanIp}' whitelisted for ${org.name}.`,
+      allowedIpPool: org.allowedIpPool
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const removeOrgIpPoolEntry = async (req, res) => {
+  try {
+    const { orgId, ipId } = req.params;
+    const { OrganizationRegistry } = getSuperAdminDb();
+    const org = await OrganizationRegistry.findOne({ orgId: orgId.toLowerCase().trim() });
+    if (!org) {
+      return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
+    }
+
+    org.allowedIpPool = (org.allowedIpPool || []).filter(item => item._id.toString() !== ipId && item.ip !== ipId);
+    await org.save();
+
+    res.status(200).json({
+      success: true,
+      message: `IP removed from whitelist.`,
+      allowedIpPool: org.allowedIpPool
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const toggleOrgIpRestriction = async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const { isIpRestrictionEnabled } = req.body;
+    const { OrganizationRegistry } = getSuperAdminDb();
+    const org = await OrganizationRegistry.findOne({ orgId: orgId.toLowerCase().trim() });
+    if (!org) {
+      return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
+    }
+
+    org.isIpRestrictionEnabled = Boolean(isIpRestrictionEnabled);
+    await org.save();
+
+    res.status(200).json({
+      success: true,
+      message: `IP Restriction set to ${org.isIpRestrictionEnabled ? 'ENABLED' : 'DISABLED'} for ${org.name}.`,
+      isIpRestrictionEnabled: org.isIpRestrictionEnabled
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 
