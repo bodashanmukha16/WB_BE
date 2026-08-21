@@ -10,8 +10,10 @@ export const getSystemNetworkIps = () => {
     for (const name of Object.keys(interfaces)) {
       for (const net of interfaces[name] || []) {
         const familyStr = String(net.family);
-        if ((familyStr === '4' || familyStr === 'IPv4') && !net.internal) {
-          ips.push(net.address);
+        if (familyStr === '4' || familyStr === 'IPv4') {
+          if (net.address && net.address !== '127.0.0.1' && !net.address.startsWith('169.254.')) {
+            ips.push(net.address);
+          }
         }
       }
     }

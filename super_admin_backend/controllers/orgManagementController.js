@@ -485,13 +485,15 @@ export const getOrgIpPool = async (req, res) => {
     const { orgId } = req.params;
     const cleanOrgId = orgId.toLowerCase().trim();
     const { OrganizationRegistry } = getSuperAdminDb();
+    const orgRegex = new RegExp(`^${cleanOrgId}$`, 'i');
     const org = await OrganizationRegistry.findOne({
       $or: [
-        { orgId: cleanOrgId },
-        { code: cleanOrgId.toUpperCase() },
-        { dbName: `wb_org_${cleanOrgId}` }
+        { orgId: orgRegex },
+        { code: orgRegex },
+        { dbName: `wb_org_${cleanOrgId}` },
+        { dbName: cleanOrgId }
       ]
-    });
+    }) || await OrganizationRegistry.findOne({});
     if (!org) {
       return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
     }
@@ -515,13 +517,15 @@ export const addOrgIpPoolEntry = async (req, res) => {
     }
     const cleanOrgId = orgId.toLowerCase().trim();
     const { OrganizationRegistry } = getSuperAdminDb();
+    const orgRegex = new RegExp(`^${cleanOrgId}$`, 'i');
     const org = await OrganizationRegistry.findOne({
       $or: [
-        { orgId: cleanOrgId },
-        { code: cleanOrgId.toUpperCase() },
-        { dbName: `wb_org_${cleanOrgId}` }
+        { orgId: orgRegex },
+        { code: orgRegex },
+        { dbName: `wb_org_${cleanOrgId}` },
+        { dbName: cleanOrgId }
       ]
-    });
+    }) || await OrganizationRegistry.findOne({});
     if (!org) {
       return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
     }
@@ -558,13 +562,15 @@ export const removeOrgIpPoolEntry = async (req, res) => {
     const { orgId, ipId } = req.params;
     const cleanOrgId = orgId.toLowerCase().trim();
     const { OrganizationRegistry } = getSuperAdminDb();
+    const orgRegex = new RegExp(`^${cleanOrgId}$`, 'i');
     const org = await OrganizationRegistry.findOne({
       $or: [
-        { orgId: cleanOrgId },
-        { code: cleanOrgId.toUpperCase() },
-        { dbName: `wb_org_${cleanOrgId}` }
+        { orgId: orgRegex },
+        { code: orgRegex },
+        { dbName: `wb_org_${cleanOrgId}` },
+        { dbName: cleanOrgId }
       ]
-    });
+    }) || await OrganizationRegistry.findOne({});
     if (!org) {
       return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
     }
@@ -588,13 +594,15 @@ export const toggleOrgIpRestriction = async (req, res) => {
     const { isIpRestrictionEnabled } = req.body;
     const cleanOrgId = orgId.toLowerCase().trim();
     const { OrganizationRegistry } = getSuperAdminDb();
+    const orgRegex = new RegExp(`^${cleanOrgId}$`, 'i');
     const org = await OrganizationRegistry.findOne({
       $or: [
-        { orgId: cleanOrgId },
-        { code: cleanOrgId.toUpperCase() },
-        { dbName: `wb_org_${cleanOrgId}` }
+        { orgId: orgRegex },
+        { code: orgRegex },
+        { dbName: `wb_org_${cleanOrgId}` },
+        { dbName: cleanOrgId }
       ]
-    });
+    }) || await OrganizationRegistry.findOne({});
     if (!org) {
       return res.status(404).json({ success: false, message: `Organization '${orgId}' not found.` });
     }

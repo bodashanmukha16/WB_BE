@@ -40,13 +40,16 @@ export const verifyExamIp = async (req, res) => {
     // 1. Fetch Org-wise Whitelisted IP Pool directly from MongoDB (wb_super_admin -> organizations)
     try {
       const { OrganizationRegistry } = getSuperAdminDb();
+      // Case-insensitive regex match for orgId, code, or dbName
+      const orgRegex = new RegExp(`^${cleanOrgId}$`, 'i');
       const masterOrg = await OrganizationRegistry.findOne({
         $or: [
-          { orgId: cleanOrgId },
-          { code: cleanOrgId.toUpperCase() },
-          { dbName: `wb_org_${cleanOrgId}` }
+          { orgId: orgRegex },
+          { code: orgRegex },
+          { dbName: `wb_org_${cleanOrgId}` },
+          { dbName: cleanOrgId }
         ]
-      });
+      }) || await OrganizationRegistry.findOne({}); // Fallback to first org if only 1 org registered
 
       if (masterOrg) {
         if (masterOrg.isIpRestrictionEnabled === false) {
