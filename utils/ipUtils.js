@@ -1,7 +1,7 @@
 import os from 'os';
 
 /**
- * Returns all local IPv4 network interface addresses on the host system
+ * Returns all local IPv4 network interface addresses on the host system (e.g. 192.168.29.5)
  */
 export const getSystemNetworkIps = () => {
   const ips = [];
@@ -24,7 +24,8 @@ export const getSystemNetworkIps = () => {
 };
 
 /**
- * Extracts all candidate IPv4/IPv6 client IPs from Express request headers, socket, body, query, and network adapters
+ * Extracts all candidate IPv4/IPv6 client IPs from Express request headers, socket, body, query, and network adapters.
+ * Prioritizes actual LAN/WAN IPv4 addresses (e.g. 192.168.29.5) over 127.0.0.1.
  */
 export const getCandidateIps = (req) => {
   const ips = new Set();
@@ -44,26 +45,36 @@ export const getCandidateIps = (req) => {
   // Include host OS network interface IPv4 addresses
   getSystemNetworkIps().forEach(ip => ips.add(ip));
 
-  const cleaned = [];
+  const nonLocal = [];
+  const local = [];
+
   ips.forEach(raw => {
     let ip = raw;
     if (ip.startsWith('::ffff:')) ip = ip.substring(7);
     if (ip === '::1') ip = '127.0.0.1';
-    if (ip) cleaned.push(ip);
+    if (ip) {
+      if (ip === '127.0.0.1' || ip === 'localhost') {
+        local.push(ip);
+      } else {
+        if (!nonLocal.includes(ip)) nonLocal.push(ip);
+      }
+    }
   });
+
+  // Prioritize real LAN IPv4 addresses (192.168.29.5) first
+  const cleaned = [...nonLocal, ...local];
 
   return cleaned.length > 0 ? cleaned : ['127.0.0.1'];
 };
 
 export const getClientIp = (req) => {
   const candidates = getCandidateIps(req);
-  const nonLocal = candidates.find(c => c !== '127.0.0.1' && c !== 'localhost');
-  return nonLocal || candidates[0] || '127.0.0.1';
+  return candidates[0] || '127.0.0.1';
 };
 
 /**
  * Strictly checks if ANY candidate request IP matches an entry in the MongoDB allowed IP pool.
- * Supports exact IPs (192.168.29.1), wildcards (192.168.29.*), and CIDR/ranges.
+ * Supports exact IPs (192.168.29.5), wildcards (192.168.29.*), and CIDR/ranges.
  */
 export const isIpInPool = (candidateIps, allowedPool = []) => {
   if (!allowedPool || allowedPool.length === 0) return false;
@@ -81,7 +92,7 @@ export const isIpInPool = (candidateIps, allowedPool = []) => {
       // Allow all wildcard entry
       if (rawEntry === '*' || rawEntry === '0.0.0.0/0') return true;
 
-      // Exact match e.g. 192.168.29.1
+      // Exact match e.g. 192.168.29.5
       if (rawEntry === cleanClient) return true;
 
       // Wildcard match e.g. 192.168.29.*
