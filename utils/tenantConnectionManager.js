@@ -51,6 +51,8 @@ export const getTenantContext = (tenantId = "default") => {
     section: { type: String, default: "A" }, // e.g. "A"
     role: { type: String, default: "student" },
     orgId: String,
+    resetToken: String,
+    resetTokenExpiry: Date,
     createdAt: { type: Date, default: Date.now }
   });
 
