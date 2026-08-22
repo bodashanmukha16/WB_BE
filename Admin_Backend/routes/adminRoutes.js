@@ -11,12 +11,14 @@ import {
   createStudent,
   updateStudent,
   deleteStudent,
-  getCollegeAnalytics
+  getCollegeAnalytics,
+  getStudentDossier
 } from "../controllers/adminStudentController.js";
 import {
   markAttendance,
   getAttendanceHistory,
-  getStudentsForAttendance
+  getStudentsForAttendance,
+  getAttendanceReportSummary
 } from "../controllers/attendanceController.js";
 import {
   getSubjects,
@@ -31,6 +33,12 @@ import {
   updateExam,
   deleteExam
 } from "../controllers/adminExamController.js";
+import {
+  getCollegeIpPool,
+  addCollegeIpPoolEntry,
+  removeCollegeIpPoolEntry,
+  toggleCollegeIpRestriction
+} from "../controllers/adminIpPoolController.js";
 
 const router = express.Router();
 
@@ -43,6 +51,7 @@ router.delete("/staff/:id", deleteStaff);
 
 // Student Management Routes (with Branch, Year, Section, Semester filters)
 router.get("/students", getAllStudents);
+router.get("/students/:id/dossier", getStudentDossier);
 router.post("/students", createStudent);
 router.put("/students/:id", updateStudent);
 router.delete("/students/:id", deleteStudent);
@@ -51,6 +60,7 @@ router.delete("/students/:id", deleteStudent);
 router.post("/attendance/mark", markAttendance);
 router.get("/attendance/history", getAttendanceHistory);
 router.get("/attendance/students", getStudentsForAttendance);
+router.get("/attendance/report-summary", getAttendanceReportSummary);
 
 // Separate Database Collection for Subjects List (for Period Attendance & Exams)
 router.get("/subjects", getSubjects);
@@ -67,5 +77,11 @@ router.delete("/exams/:id", deleteExam);
 
 // College Dashboard Executive Metrics
 router.get("/analytics", getCollegeAnalytics);
+
+// College Organization IP Pool & Examination Lockdown Security Routes
+router.get("/ip-pool", getCollegeIpPool);
+router.post("/ip-pool", addCollegeIpPoolEntry);
+router.delete("/ip-pool/:ipId", removeCollegeIpPoolEntry);
+router.put("/ip-pool/toggle", toggleCollegeIpRestriction);
 
 export default router;

@@ -191,3 +191,151 @@ export const getStudentsForAttendance = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error fetching students" });
   }
 };
+
+// Fetch Detailed Class Attendance Report Summary (Student Register + Analytics + Session Logs)
+export const getAttendanceReportSummary = async (req, res) => {
+  try {
+    const { department, year, section, subjectCode } = req.query;
+    const { Attendance: TenantAttendance, User: TenantUser } = getTenantModels(req);
+    const orgId = (req.headers["x-tenant-id"] || req.tenantId || "svck").toLowerCase().trim();
+
+    let targetDept = department;
+    const staffRole = req.staffUser?.role || req.user?.role;
+    const staffDept = req.staffUser?.department || req.user?.department;
+
+    if ((staffRole === "hod" || staffRole === "lecturer") && staffDept && staffDept !== "all") {
+      targetDept = staffDept;
+    }
+
+    const studentFilter = { role: "student" };
+    if (targetDept && targetDept !== "all") {
+      studentFilter.branch = new RegExp(`^${targetDept.trim()}$`, "i");
+    }
+    if (year && year !== "all") {
+      studentFilter.year = Number(year);
+    }
+    if (section && section !== "all") {
+      studentFilter.section = section.trim();
+    }
+
+    // 1. Fetch Students
+    const studentsDoc = await TenantUser.find(studentFilter)
+      .select("username fullname email branch year semester section")
+      .sort({ username: 1 });
+
+    // 2. Fetch Attendance Logged Sessions for Class
+    const attendanceFilter = {};
+    if (targetDept && targetDept !== "all") {
+      attendanceFilter.department = targetDept.toLowerCase();
+    }
+    if (year && year !== "all") attendanceFilter.year = Number(year);
+    if (section && section !== "all") attendanceFilter.section = section;
+    if (subjectCode && subjectCode !== "all") attendanceFilter.subjectCode = subjectCode;
+
+    const sessions = await TenantAttendance.find(attendanceFilter).sort({ date: -1, createdAt: -1 });
+
+    // 3. Process Attendance for each student
+    let totalClasses = sessions.length;
+    let totalEligibleCount = 0;
+    let totalCondonationCount = 0;
+    let totalShortageCount = 0;
+    let cumulativePercentageSum = 0;
+
+    const studentReports = studentsDoc.map((s) => {
+      const sRoll = (s.username || "").toUpperCase();
+      let attended = 0;
+      let classesForStudent = 0;
+
+      sessions.forEach((sess) => {
+        let isPresent = false;
+        let isFoundInClass = false;
+
+        if (sess.records && Array.isArray(sess.records) && sess.records.length > 0) {
+          const rec = sess.records.find(
+            (r) =>
+              (r.rollNumber && r.rollNumber.toUpperCase() === sRoll) ||
+              (r.studentId && r.studentId.toString().toUpperCase() === sRoll)
+          );
+          if (rec) {
+            isFoundInClass = true;
+            isPresent = (rec.status || "").toLowerCase() === "present";
+          }
+        }
+
+        if (!isFoundInClass && sess.studentsPresent && Array.isArray(sess.studentsPresent)) {
+          isPresent = sess.studentsPresent.some((roll) => (roll || "").toUpperCase() === sRoll);
+          isFoundInClass = true;
+        }
+
+        if (isFoundInClass) {
+          classesForStudent++;
+          if (isPresent) attended++;
+        }
+      });
+
+      const pctNum = classesForStudent > 0 ? (attended / classesForStudent) * 100 : 0;
+      const pct = pctNum.toFixed(1);
+
+      let status = "Shortage";
+      if (pctNum >= 75) {
+        status = "Eligible";
+        totalEligibleCount++;
+      } else if (pctNum >= 65) {
+        status = "Condonation";
+        totalCondonationCount++;
+      } else {
+        totalShortageCount++;
+      }
+
+      cumulativePercentageSum += pctNum;
+
+      return {
+        studentId: s._id,
+        rollNumber: s.username,
+        fullname: s.fullname || s.username,
+        email: s.email,
+        branch: (s.branch || "CSE").toUpperCase(),
+        year: s.year || 3,
+        section: s.section || "A",
+        totalClasses: classesForStudent,
+        attended,
+        absent: classesForStudent - attended,
+        percentage: `${pct}%`,
+        percentageNum: pctNum,
+        status
+      };
+    });
+
+    const avgPct = studentReports.length > 0 ? (cumulativePercentageSum / studentReports.length).toFixed(1) : "0.0";
+
+    res.status(200).json({
+      success: true,
+      orgId,
+      analytics: {
+        totalStudents: studentReports.length,
+        totalSessionsLogged: totalClasses,
+        averageAttendancePct: `${avgPct}%`,
+        eligibleCount: totalEligibleCount,
+        condonationCount: totalCondonationCount,
+        shortageCount: totalShortageCount
+      },
+      studentReports,
+      sessions: sessions.map((sess) => ({
+        id: sess._id,
+        date: sess.date,
+        subjectCode: sess.subjectCode,
+        subjectName: sess.subjectName,
+        facultyName: sess.facultyName,
+        periods: sess.periods,
+        department: sess.department?.toUpperCase() || "CSE",
+        year: sess.year,
+        section: sess.section,
+        presentCount: (sess.records || []).filter((r) => (r.status || "").toLowerCase() === "present").length || (sess.studentsPresent || []).length,
+        totalCount: (sess.records || []).length || (sess.studentsPresent || []).length
+      }))
+    });
+  } catch (error) {
+    console.error("Error generating attendance report summary:", error);
+    res.status(500).json({ success: false, message: "Server error generating attendance report summary" });
+  }
+};

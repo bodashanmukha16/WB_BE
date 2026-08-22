@@ -73,10 +73,10 @@ export const getSubjects = async (req, res) => {
       subjects = await TenantSubject.find({}).sort({ year: 1, subjectCode: 1 });
     }
 
-    // Deduplicate subjects by subjectName to prevent multiple duplicate entries in dropdowns
+    // Deduplicate subjects by subjectCode + subjectName combination if needed
     const uniqueMap = new Map();
     subjects.forEach((s) => {
-      const key = s.subjectName.trim().toLowerCase();
+      const key = `${(s.subjectCode || "").trim()}_${(s.subjectName || "").trim()}`.toLowerCase();
       if (!uniqueMap.has(key)) {
         uniqueMap.set(key, s);
       }
