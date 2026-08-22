@@ -1,6 +1,7 @@
 import Attendance from "../models/Attendance.js";
 import User from "../../models/User.js";
 import getTenantContext from "../../utils/tenantConnectionManager.js";
+import getSuperAdminDb from "../../super_admin_backend/utils/superAdminDb.js";
 
 // Helper to resolve physical tenant Attendance & User models for current organization
 const getTenantModels = (req) => {
@@ -308,9 +309,39 @@ export const getAttendanceReportSummary = async (req, res) => {
 
     const avgPct = studentReports.length > 0 ? (cumulativePercentageSum / studentReports.length).toFixed(1) : "0.0";
 
+    // 4. Fetch Master Org Details for Branding strictly from MongoDB OrganizationRegistry
+    let orgDetails = {
+      name: "SV College of Engineering",
+      code: "SVCK",
+      logo: ""
+    };
+
+    try {
+      const { OrganizationRegistry } = getSuperAdminDb();
+      const cleanOrgId = orgId.toLowerCase().trim();
+      const orgRegex = new RegExp(`^${cleanOrgId}$`, 'i');
+      const masterOrg = await OrganizationRegistry.findOne({
+        $or: [
+          { orgId: orgRegex },
+          { code: orgRegex },
+          { dbName: `wb_org_${cleanOrgId}` },
+          { dbName: cleanOrgId }
+        ]
+      }).lean() || await OrganizationRegistry.findOne({}).lean();
+
+      if (masterOrg) {
+        orgDetails = {
+          name: masterOrg.name || orgDetails.name,
+          code: masterOrg.code || orgDetails.code,
+          logo: masterOrg.logo || ""
+        };
+      }
+    } catch (e) {}
+
     res.status(200).json({
       success: true,
       orgId,
+      orgDetails,
       analytics: {
         totalStudents: studentReports.length,
         totalSessionsLogged: totalClasses,

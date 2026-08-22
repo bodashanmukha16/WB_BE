@@ -327,11 +327,11 @@ export const getStudentDossier = async (req, res) => {
       status: "Active / Good Standing"
     };
 
-    // 2. Fetch Master Org Details for Branding
+    // 2. Fetch Master Org Details for Branding strictly from MongoDB OrganizationRegistry
     let orgDetails = {
       name: "SV College of Engineering",
       code: "SVCK",
-      logo: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=150&auto=format&fit=crop&q=80"
+      logo: ""
     };
 
     try {
@@ -351,7 +351,7 @@ export const getStudentDossier = async (req, res) => {
         orgDetails = {
           name: masterOrg.name || orgDetails.name,
           code: masterOrg.code || orgDetails.code,
-          logo: masterOrg.logo || orgDetails.logo
+          logo: masterOrg.logo || ""
         };
       }
     } catch (e) {}
