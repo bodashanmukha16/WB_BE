@@ -29,6 +29,7 @@ import {
 import {
   getAllExams,
   getExamById,
+  getExamSubmissionsReport,
   createExam,
   updateExam,
   deleteExam
@@ -70,6 +71,7 @@ router.delete("/subjects/:id", deleteSubject);
 
 // Examination Management CRUD Routes (Create, Read, Update, Delete Exams)
 router.get("/exams", getAllExams);
+router.get("/exams/:id/report", getExamSubmissionsReport);
 router.get("/exams/:id", getExamById);
 router.post("/exams", createExam);
 router.put("/exams/:id", updateExam);

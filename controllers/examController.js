@@ -344,12 +344,44 @@ export const submitExam = async (req, res) => {
     const rawBranchInput = branch || studentBranch || department || examDoc.department || userId || studentEmail;
     const resolvedBranch = resolveStudentBranch(rawBranchInput);
 
+    // Resolve student Roll Number and Full Name from Tenant User DB
+    const { User: TenantUser } = req.tenantModels || {};
+    const resolvedRollNo = req.body.studentRollNo || req.body.rollNumber || req.body.rollNo || userId || "N/A";
+    let resolvedName = studentName || req.body.name || req.body.fullname;
+
+    if (!resolvedName || resolvedName === userId || resolvedName === resolvedRollNo) {
+      if (TenantUser) {
+        try {
+          const uDoc = await TenantUser.findOne({
+            $or: [{ username: userId }, { username: resolvedRollNo }, { email: studentEmail }]
+          }).lean();
+          if (uDoc && (uDoc.fullname || uDoc.name)) {
+            resolvedName = uDoc.fullname || uDoc.name;
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (!resolvedName || resolvedName === resolvedRollNo) {
+      if (studentEmail && studentEmail.includes("@")) {
+        const emailUser = studentEmail.split("@")[0];
+        if (emailUser.toLowerCase() !== resolvedRollNo.toLowerCase()) {
+          resolvedName = emailUser.replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        } else {
+          resolvedName = `Student ${resolvedRollNo}`;
+        }
+      } else {
+        resolvedName = `Student ${resolvedRollNo}`;
+      }
+    }
+
     const submissionPayload = {
       examId: mongoIdStr,
       examTitle: examDoc.title,
       userId: userId || "guest_user",
+      studentRollNo: resolvedRollNo,
       studentEmail: studentEmail || "student@workbench.edu",
-      studentName: studentName || "Student",
+      studentName: resolvedName,
       branch: resolvedBranch,
       orgId: tenantId,
       score,
