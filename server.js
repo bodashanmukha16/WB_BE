@@ -1,4 +1,3 @@
-
 import express from "express"
 import cors from "cors"
 import dotenv from "dotenv"
@@ -14,6 +13,7 @@ import initSuperAdminDatabase from './super_admin_backend/utils/initSuperAdmin.j
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', true);
 app.use(cors())
 app.use(express.json())
 

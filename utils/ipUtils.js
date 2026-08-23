@@ -25,25 +25,37 @@ export const getSystemNetworkIps = () => {
 
 /**
  * Extracts all candidate IPv4/IPv6 client IPs from Express request headers, socket, body, query, and network adapters.
- * Prioritizes actual LAN/WAN IPv4 addresses (e.g. 192.168.29.5) over 127.0.0.1.
+ * Prioritizes the true client WAN/LAN IPv4 address from x-forwarded-for when behind reverse proxies (Render, Cloudflare, AWS).
  */
 export const getCandidateIps = (req) => {
   const ips = new Set();
 
+  // 1. Check explicit client IP passed in request body, query, or custom header
   if (req && req.body && req.body.clientIp) ips.add(req.body.clientIp.trim());
   if (req && req.query && req.query.clientIp) ips.add(req.query.clientIp.trim());
   if (req && req.headers && req.headers['x-client-ip']) ips.add(req.headers['x-client-ip'].trim());
 
+  // 2. Extract real client IP from reverse proxy headers (Render, Cloudflare, AWS ALB)
   if (req && req.headers && req.headers['x-forwarded-for']) {
-    req.headers['x-forwarded-for'].split(',').forEach(s => ips.add(s.trim()));
+    // The FIRST IP in x-forwarded-for is ALWAYS the original client's public IPv4 address
+    const forwardedList = req.headers['x-forwarded-for'].split(',').map(s => s.trim());
+    if (forwardedList.length > 0 && forwardedList[0]) {
+      ips.add(forwardedList[0]);
+    }
   }
   if (req && req.headers && req.headers['x-real-ip']) ips.add(req.headers['x-real-ip'].trim());
-  if (req && req.socket && req.socket.remoteAddress) ips.add(req.socket.remoteAddress.trim());
-  if (req && req.socket && req.socket.localAddress) ips.add(req.socket.localAddress.trim());
+
+  // 3. Express req.ip (populated when trust proxy is enabled)
   if (req && req.ip) ips.add(req.ip.trim());
 
-  // Include host OS network interface IPv4 addresses
-  getSystemNetworkIps().forEach(ip => ips.add(ip));
+  // 4. Socket remote address
+  if (req && req.socket && req.socket.remoteAddress) ips.add(req.socket.remoteAddress.trim());
+
+  // 5. Host system network interface IPv4 addresses (only when running locally, not in cloud containers)
+  const isCloudEnv = Boolean(process.env.RENDER || process.env.NODE_ENV === 'production');
+  if (!isCloudEnv) {
+    getSystemNetworkIps().forEach(ip => ips.add(ip));
+  }
 
   const nonLocal = [];
   const local = [];
@@ -61,9 +73,7 @@ export const getCandidateIps = (req) => {
     }
   });
 
-  // Prioritize real LAN IPv4 addresses (192.168.29.5) first
   const cleaned = [...nonLocal, ...local];
-
   return cleaned.length > 0 ? cleaned : ['127.0.0.1'];
 };
 
@@ -74,7 +84,7 @@ export const getClientIp = (req) => {
 
 /**
  * Strictly checks if ANY candidate request IP matches an entry in the MongoDB allowed IP pool.
- * Supports exact IPs (192.168.29.5), wildcards (192.168.29.*), and CIDR/ranges.
+ * Supports exact IPs (192.168.29.5 or 157.48.20.10), wildcards (192.168.29.* or 157.48.*), and CIDR/ranges.
  */
 export const isIpInPool = (candidateIps, allowedPool = []) => {
   if (!allowedPool || allowedPool.length === 0) return false;
@@ -92,10 +102,10 @@ export const isIpInPool = (candidateIps, allowedPool = []) => {
       // Allow all wildcard entry
       if (rawEntry === '*' || rawEntry === '0.0.0.0/0') return true;
 
-      // Exact match e.g. 192.168.29.5
+      // Exact match e.g. 192.168.29.5 or 157.48.20.10
       if (rawEntry === cleanClient) return true;
 
-      // Wildcard match e.g. 192.168.29.*
+      // Wildcard match e.g. 192.168.29.* or 157.48.*
       if (rawEntry.includes('*')) {
         const regexStr = '^' + rawEntry.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
         const regex = new RegExp(regexStr);
