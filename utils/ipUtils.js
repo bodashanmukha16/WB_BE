@@ -44,52 +44,71 @@ export const getSystemNetworkIps = () => {
 
 /**
  * Extracts all candidate IPv4/IPv6 client IPs from Express request headers, socket, body, query, and network adapters.
- * STRICTLY PRIORITIZES private LAN system IPv4 addresses (e.g. 192.168.29.5) FIRST.
+ * Differentiates between Localhost (prioritizes local LAN 192.168.x.x) and Cloud Proxies like Render (prioritizes x-forwarded-for client IP).
  */
 export const getCandidateIps = (req) => {
-  const ips = new Set();
+  const clientIps = new Set();
+  const serverIps = new Set();
 
-  // 1. Include local host OS network interface IPv4 addresses FIRST
-  getSystemNetworkIps().forEach(ip => ips.add(ip));
+  // 1. Explicit client-supplied IP (from frontend request body / query / header)
+  if (req && req.body && req.body.clientIp) clientIps.add(req.body.clientIp.trim());
+  if (req && req.query && req.query.clientIp) clientIps.add(req.query.clientIp.trim());
+  if (req && req.headers && req.headers['x-client-ip']) clientIps.add(req.headers['x-client-ip'].trim());
 
-  // 2. Include client-passed IP in body/query/headers (if provided by client app)
-  if (req && req.body && req.body.clientIp) ips.add(req.body.clientIp.trim());
-  if (req && req.query && req.query.clientIp) ips.add(req.query.clientIp.trim());
-  if (req && req.headers && req.headers['x-client-ip']) ips.add(req.headers['x-client-ip'].trim());
-
-  // 3. Include HTTP request headers & socket remote addresses
+  // 2. Client HTTP Request headers (from reverse proxies like Render / Cloudflare)
+  let isBehindProxy = false;
   if (req && req.headers && req.headers['x-forwarded-for']) {
+    isBehindProxy = true;
     req.headers['x-forwarded-for'].split(',').forEach(s => {
       const trimmed = s.trim();
-      if (trimmed) ips.add(trimmed);
+      if (trimmed) clientIps.add(trimmed);
     });
   }
-  if (req && req.headers && req.headers['x-real-ip']) ips.add(req.headers['x-real-ip'].trim());
-  if (req && req.ip) ips.add(req.ip.trim());
-  if (req && req.socket && req.socket.remoteAddress) ips.add(req.socket.remoteAddress.trim());
+  if (req && req.headers && req.headers['x-real-ip']) {
+    isBehindProxy = true;
+    clientIps.add(req.headers['x-real-ip'].trim());
+  }
 
-  const privateLan = [];
-  const publicWan = [];
-  const localLoopback = [];
+  if (req && req.ip) clientIps.add(req.ip.trim());
+  if (req && req.socket && req.socket.remoteAddress) clientIps.add(req.socket.remoteAddress.trim());
 
-  ips.forEach(raw => {
-    let ip = raw;
-    if (ip.startsWith('::ffff:')) ip = ip.substring(7);
-    if (ip === '::1') ip = '127.0.0.1';
-    if (ip) {
-      if (ip === '127.0.0.1' || ip === 'localhost') {
-        if (!localLoopback.includes(ip)) localLoopback.push(ip);
-      } else if (isPrivateLanIp(ip)) {
-        if (!privateLan.includes(ip)) privateLan.push(ip);
-      } else {
-        if (!publicWan.includes(ip)) publicWan.push(ip);
+  // 3. Server host system network interface IPv4s
+  getSystemNetworkIps().forEach(ip => serverIps.add(ip));
+
+  const cleanList = (set) => {
+    const list = [];
+    set.forEach(raw => {
+      let ip = raw;
+      if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+      if (ip === '::1') ip = '127.0.0.1';
+      if (ip && ip !== '127.0.0.1' && ip !== 'localhost') {
+        if (!list.includes(ip)) list.push(ip);
       }
-    }
+    });
+    return list;
+  };
+
+  const cleanClient = cleanList(clientIps);
+  const cleanServer = cleanList(serverIps);
+
+  let candidates = [];
+  if (isBehindProxy) {
+    // On Render: client IP from x-forwarded-for is the real client IP (e.g. 49.37.129.163). Ignore Render container internal 10.x IP as primary.
+    candidates = [...cleanClient, ...cleanServer, '127.0.0.1'];
+  } else {
+    // On Localhost: local system network interface (e.g. 192.168.29.5) is the primary LAN IP.
+    const lanServerIps = cleanServer.filter(ip => isPrivateLanIp(ip));
+    const otherServerIps = cleanServer.filter(ip => !isPrivateLanIp(ip));
+    candidates = [...lanServerIps, ...cleanClient, ...otherServerIps, '127.0.0.1'];
+  }
+
+  // Deduplicate
+  const result = [];
+  candidates.forEach(ip => {
+    if (ip && !result.includes(ip)) result.push(ip);
   });
 
-  // Prioritize private LAN IPv4 (192.168.x.x / 10.x.x.x) FIRST, then Public WAN, then loopback
-  const cleaned = [...privateLan, ...publicWan, ...localLoopback];
-  return cleaned.length > 0 ? cleaned : ['127.0.0.1'];
+  return result.length > 0 ? result : ['127.0.0.1'];
 };
 
 export const getClientIp = (req) => {
