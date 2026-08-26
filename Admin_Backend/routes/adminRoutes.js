@@ -40,6 +40,12 @@ import {
   removeCollegeIpPoolEntry,
   toggleCollegeIpRestriction
 } from "../controllers/adminIpPoolController.js";
+import {
+  getBranches,
+  createBranch,
+  updateBranch,
+  deleteBranch
+} from "../controllers/branchController.js";
 
 const router = express.Router();
 
@@ -56,6 +62,12 @@ router.get("/students/:id/dossier", getStudentDossier);
 router.post("/students", createStudent);
 router.put("/students/:id", updateStudent);
 router.delete("/students/:id", deleteStudent);
+
+// Dedicated Database Collection for Branches / Departments
+router.get("/branches", getBranches);
+router.post("/branches", createBranch);
+router.put("/branches/:id", updateBranch);
+router.delete("/branches/:id", deleteBranch);
 
 // Attendance Management Routes
 router.post("/attendance/mark", markAttendance);

@@ -15,6 +15,7 @@ const examSchema = new mongoose.Schema({
   subject: { type: String, required: true },
   code: { type: String, required: true },
   department: { type: String, default: "cse", lowercase: true, trim: true },
+  departments: [{ type: String, lowercase: true, trim: true }],
   year: { type: Number, default: 3 },
   orgId: { type: String, required: true }, // e.g. svck, aits
   category: { type: String, default: "Mid-Term Examination" }, // Mid-Term, Lab Practical, Mock Gate, Coding Test

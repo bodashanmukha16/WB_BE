@@ -77,6 +77,7 @@ export const getTenantContext = (tenantId = "default") => {
     subject: { type: String, required: true },
     code: { type: String, required: true },
     department: { type: String, default: "cse", lowercase: true, trim: true },
+    departments: [{ type: String, lowercase: true, trim: true }],
     year: { type: Number, default: 3 },
     orgId: { type: String, required: true },
     category: { type: String, default: "Mid-Term Examination" },
@@ -179,6 +180,15 @@ export const getTenantContext = (tenantId = "default") => {
     createdAt: { type: Date, default: Date.now }
   });
 
+  // 9. Organization Branch / Department Schema & Model ('college_branches')
+  const branchSchema = new mongoose.Schema({
+    branchCode: { type: String, required: true, uppercase: true, trim: true },
+    branchName: { type: String, required: true, trim: true },
+    status: { type: String, default: "active" },
+    orgId: { type: String, default: cleanTenantId },
+    createdAt: { type: Date, default: Date.now }
+  });
+
   const TenantUser = tenantDb.model("User", userSchema, "stu_database");
   const TenantCourseEnrollment = tenantDb.model("CourseEnrollment", courseEnrollmentSchema, "course_enrollments");
   const TenantExam = tenantDb.model("Exam", examSchema, "org_exams");
@@ -187,6 +197,26 @@ export const getTenantContext = (tenantId = "default") => {
   const TenantSubject = tenantDb.model("Subject", subjectSchema, "college_subjects");
   const TenantStaffUser = tenantDb.model("StaffUser", staffSchema, "staff_database");
   const TenantAttendance = tenantDb.model("Attendance", attendanceSchema, "attendance_records");
+  const TenantBranch = tenantDb.model("Branch", branchSchema, "college_branches");
+
+  // Auto-seed default branches if collection is empty
+  (async () => {
+    try {
+      const count = await TenantBranch.countDocuments();
+      if (count === 0) {
+        const defaultBranches = [
+          { branchCode: "CSE", branchName: "Computer Science & Engineering", status: "active", orgId: cleanTenantId },
+          { branchCode: "ECE", branchName: "Electronics & Communication Engineering", status: "active", orgId: cleanTenantId },
+          { branchCode: "EEE", branchName: "Electrical & Electronics Engineering", status: "active", orgId: cleanTenantId },
+          { branchCode: "MECH", branchName: "Mechanical Engineering", status: "active", orgId: cleanTenantId },
+          { branchCode: "CIVIL", branchName: "Civil Engineering", status: "active", orgId: cleanTenantId },
+          { branchCode: "IT", branchName: "Information Technology", status: "active", orgId: cleanTenantId },
+          { branchCode: "AIML", branchName: "Artificial Intelligence & Machine Learning", status: "active", orgId: cleanTenantId }
+        ];
+        await TenantBranch.insertMany(defaultBranches);
+      }
+    } catch (seedErr) {}
+  })();
 
   /**
    * Returns a branch-specific results collection model inside current Organization DB (wb_org_[orgId])
@@ -219,6 +249,7 @@ export const getTenantContext = (tenantId = "default") => {
       Subject: TenantSubject,
       StaffUser: TenantStaffUser,
       Attendance: TenantAttendance,
+      Branch: TenantBranch,
       getBranchResultsModel
     }
   };

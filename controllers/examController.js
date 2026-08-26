@@ -192,10 +192,19 @@ export const getOrgExams = async (req, res) => {
         const mongoIdStr = e._id ? e._id.toString() : "";
         const computedDept = getExamDept(obj);
 
-        // Strictly filter by department if cleanBranch is specified and not 'all'
+        // Multi-Branch aware filtering: check computedDept, department, and departments array
         if (cleanBranch !== "all") {
-          if (computedDept !== cleanBranch && computedDept !== "all") {
-            continue; // Exclude exams belonging to other departments!
+          const deptsArray = Array.isArray(obj.departments) ? obj.departments.map((d) => d.toLowerCase().trim()) : [];
+          const isDeptMatched =
+            computedDept === cleanBranch ||
+            computedDept === "all" ||
+            (obj.department && obj.department.toLowerCase().split(",").includes(cleanBranch)) ||
+            (obj.department && obj.department.toLowerCase() === "all") ||
+            deptsArray.includes("all") ||
+            deptsArray.includes(cleanBranch);
+
+          if (!isDeptMatched) {
+            continue; // Exclude exams not assigned to student's branch!
           }
         }
 

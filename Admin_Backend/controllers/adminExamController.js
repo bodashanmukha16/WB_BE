@@ -29,12 +29,21 @@ export const getAllExams = async (req, res) => {
 
     const isAdminOrPrincipal = queryRole === "admin" || queryRole === "principal" || queryRole === "superadmin" || (req.staffUser?.role === "admin" || req.staffUser?.role === "principal");
 
-    if (!isAdminOrPrincipal && queryDept !== "all") {
-      // HOD / Lecturer -> Strictly scope to their branch exams!
-      filter.department = new RegExp(`^${queryDept.trim()}$`, "i");
-    } else if (department && department !== "all") {
-      // Admin / Principal explicit dropdown filter
-      filter.department = new RegExp(`^${department.trim()}$`, "i");
+    const rawDeptQuery = !isAdminOrPrincipal && queryDept !== "all"
+      ? queryDept.trim().toLowerCase()
+      : (department && department !== "all" ? department.toString().trim().toLowerCase() : null);
+
+    if (rawDeptQuery) {
+      const targetDepts = rawDeptQuery.split(",").map((d) => d.trim().toLowerCase()).filter(Boolean);
+      if (targetDepts.length > 0 && !targetDepts.includes("all")) {
+        const regExps = targetDepts.map((d) => new RegExp(`^${d}$`, "i"));
+        filter.$or = [
+          { department: "all" },
+          { departments: "all" },
+          { department: { $in: regExps } },
+          { departments: { $in: targetDepts } }
+        ];
+      }
     }
 
     if (year && year !== "all") {
@@ -93,6 +102,7 @@ export const createExam = async (req, res) => {
       code,
       subject,
       department,
+      departments,
       year,
       durationMinutes,
       totalMarks,
@@ -108,11 +118,24 @@ export const createExam = async (req, res) => {
       return res.status(400).json({ success: false, message: "Exam Title, Code, and Subject are required" });
     }
 
+    // Normalize multi-branch array and legacy department string
+    let parsedDepts = [];
+    if (Array.isArray(departments) && departments.length > 0) {
+      parsedDepts = departments.map((d) => d.toString().toLowerCase().trim());
+    } else if (typeof department === "string" && department.trim().length > 0) {
+      parsedDepts = department.split(",").map((d) => d.toLowerCase().trim());
+    } else {
+      parsedDepts = ["cse"];
+    }
+
+    const primaryDept = parsedDepts.includes("all") ? "all" : (parsedDepts[0] || "cse");
+
     const newExam = new Exam({
       title,
       code: code.toUpperCase(),
       subject,
-      department: (department || "cse").toLowerCase(),
+      department: primaryDept,
+      departments: parsedDepts,
       year: Number(year || 3),
       durationMinutes: Number(durationMinutes || 30),
       totalMarks: Number(totalMarks || 20),
@@ -160,7 +183,14 @@ export const updateExam = async (req, res) => {
     const { Exam, ExamQuestion } = getTenantExamModels(req);
     const orgId = req.tenantId || req.headers["x-tenant-id"] || "svck";
 
-    if (updateData.department) updateData.department = updateData.department.toLowerCase();
+    if (updateData.departments && Array.isArray(updateData.departments)) {
+      updateData.departments = updateData.departments.map((d) => d.toString().toLowerCase().trim());
+      updateData.department = updateData.departments.includes("all") ? "all" : (updateData.departments[0] || "cse");
+    } else if (updateData.department) {
+      const depts = updateData.department.toString().split(",").map((d) => d.toLowerCase().trim());
+      updateData.departments = depts;
+      updateData.department = depts.includes("all") ? "all" : (depts[0] || "cse");
+    }
     if (updateData.year) updateData.year = Number(updateData.year);
 
     const updated = await Exam.findByIdAndUpdate(id, updateData, { new: true });
@@ -286,7 +316,17 @@ export const getExamSubmissionsReport = async (req, res) => {
 
     // Query exam_submissions across all branch collections and separate Results DB ('wb_results_db')
     const rawMatches = [];
-    const branches = ["cse", "ece", "eee", "mech", "civil"];
+    let branches = ["cse", "ece", "eee", "mech", "civil", "it", "aiml", "aids", "csm"];
+    try {
+      if (ctx.models && ctx.models.Branch) {
+        const dbBranches = await ctx.models.Branch.find({}).lean();
+        if (dbBranches && dbBranches.length > 0) {
+          const codes = dbBranches.map((b) => b.branchCode.toLowerCase());
+          branches = Array.from(new Set([...branches, ...codes]));
+        }
+      }
+    } catch (e) {}
+
     const idQuery = [
       { examId: id },
       { examId: id.toString() },
