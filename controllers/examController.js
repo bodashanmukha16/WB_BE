@@ -181,8 +181,10 @@ export const getOrgExams = async (req, res) => {
     const cacheKey = `org_exams:${tenantId}:${departmentQuery || 'all'}:${yearQuery || 'all'}`;
     const cachedExams = await getCache(cacheKey);
     if (cachedExams) {
-      return res.status(200).json(cachedExams);
+      res.setHeader("X-Cache", "HIT");
+      return res.status(200).json({ ...cachedExams, cached: true });
     }
+    res.setHeader("X-Cache", "MISS");
 
     const { Exam, ExamQuestion } = req.tenantModels || {};
     let exams = [];
@@ -253,8 +255,10 @@ export const getExamById = async (req, res) => {
     const cacheKey = `exam_details:${tenantId}:${id}`;
     const cachedExam = await getCache(cacheKey);
     if (cachedExam) {
-      return res.status(200).json(cachedExam);
+      res.setHeader("X-Cache", "HIT");
+      return res.status(200).json({ ...cachedExam, cached: true });
     }
+    res.setHeader("X-Cache", "MISS");
 
     const { Exam, ExamQuestion } = req.tenantModels || {};
 
@@ -451,8 +455,10 @@ export const getExamHistory = async (req, res) => {
     const cacheKey = `exam_history:${tenantId}:${userId}:${resolvedBranch}`;
     const cachedHistory = await getCache(cacheKey);
     if (cachedHistory) {
-      return res.status(200).json(cachedHistory);
+      res.setHeader("X-Cache", "HIT");
+      return res.status(200).json({ ...cachedHistory, cached: true });
     }
+    res.setHeader("X-Cache", "MISS");
 
     const { getBranchResultsModel } = req.tenantModels || {};
     let submissions = [];

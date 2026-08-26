@@ -13,7 +13,12 @@ console.log("⚡ [In-Memory Cache] Zero-Cost High-Performance Node.js Cache Acti
 export const getCache = async (key) => {
   try {
     const value = memoryCache.get(key);
-    return value !== undefined ? value : null;
+    if (value !== undefined) {
+      console.log(`⚡ [Cache HIT] '${key}'`);
+      return value;
+    }
+    console.log(`🗄️ [Cache MISS] '${key}' (Fetching from Database)`);
+    return null;
   } catch (error) {
     console.warn(`⚠️ [Cache getCache Error] Key: ${key} - ${error.message}`);
     return null;
