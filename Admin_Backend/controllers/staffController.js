@@ -200,11 +200,22 @@ export const getAllStaff = async (req, res) => {
     const { department, role } = req.query;
     const orgId = (req.headers["x-tenant-id"] || req.tenantId || "svck").toLowerCase().trim();
 
+    const queryRole = (req.query.role || req.headers["x-user-role"] || req.headers["x-staff-role"] || req.userRole || req.staffUser?.role || "admin").toString().toLowerCase().trim();
+    const queryDept = (department || req.headers["x-user-branch"] || req.headers["x-user-dept"] || req.headers["x-staff-dept"] || req.userDept || req.staffUser?.department || "all").toString().toLowerCase().trim();
+
     const TenantStaff = getTenantStaffModel(req, orgId);
     const filter = {};
 
-    if (department && department !== "all") {
-      filter.department = department.toLowerCase();
+    let targetDept = queryDept;
+    if ((queryRole === "hod" || queryRole === "lecturer") && queryDept !== "all") {
+      targetDept = queryDept;
+    }
+
+    if (targetDept && targetDept !== "all") {
+      filter.$or = [
+        { department: new RegExp(`^${targetDept.trim()}$`, "i") },
+        { department: "all" }
+      ];
     }
 
     if (role && role !== "all") {

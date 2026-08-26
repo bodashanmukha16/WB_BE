@@ -25,10 +25,18 @@ export const getAllExams = async (req, res) => {
     const { Exam } = getTenantExamModels(req);
     const filter = {};
 
-    if (department && department !== "all") {
-      filter.department = department.toLowerCase();
+    const queryRole = (req.query.role || req.headers["x-user-role"] || req.headers["x-staff-role"] || req.userRole || req.staffUser?.role || "admin").toString().toLowerCase().trim();
+    const queryDept = (department || req.headers["x-user-branch"] || req.headers["x-user-dept"] || req.headers["x-staff-dept"] || req.userDept || req.staffUser?.department || "all").toString().toLowerCase().trim();
+
+    let targetDept = queryDept;
+    if ((queryRole === "hod" || queryRole === "lecturer") && queryDept !== "all") {
+      targetDept = queryDept;
     }
-    if (year) {
+
+    if (targetDept && targetDept !== "all") {
+      filter.department = new RegExp(`^${targetDept.trim()}$`, "i");
+    }
+    if (year && year !== "all") {
       filter.year = Number(year);
     }
     if (status && status !== "all") {
