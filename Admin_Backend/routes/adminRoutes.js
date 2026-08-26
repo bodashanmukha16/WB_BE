@@ -46,6 +46,12 @@ import {
   updateBranch,
   deleteBranch
 } from "../controllers/branchController.js";
+import {
+  getNotifications,
+  createNotification,
+  updateNotification,
+  deleteNotification
+} from "../controllers/notificationController.js";
 
 const router = express.Router();
 
@@ -68,6 +74,12 @@ router.get("/branches", getBranches);
 router.post("/branches", createBranch);
 router.put("/branches/:id", updateBranch);
 router.delete("/branches/:id", deleteBranch);
+
+// Organization Updates & Notifications Routes
+router.get("/notifications", getNotifications);
+router.post("/notifications", createNotification);
+router.put("/notifications/:id", updateNotification);
+router.delete("/notifications/:id", deleteNotification);
 
 // Attendance Management Routes
 router.post("/attendance/mark", markAttendance);

@@ -189,6 +189,22 @@ export const getTenantContext = (tenantId = "default") => {
     createdAt: { type: Date, default: Date.now }
   });
 
+  // 10. Organization Notifications & Updates Schema & Model ('college_notifications')
+  const notificationSchema = new mongoose.Schema({
+    title: { type: String, required: true, trim: true },
+    description: { type: String, required: true, trim: true },
+    category: { type: String, default: "Academic" },
+    department: { type: String, default: "all", lowercase: true, trim: true },
+    departments: [{ type: String, lowercase: true, trim: true }],
+    year: { type: String, default: "all" },
+    priority: { type: String, default: "normal" },
+    isNew: { type: Boolean, default: true },
+    attachment: { type: String, default: "" },
+    createdBy: { type: String, default: "College Admin" },
+    orgId: { type: String, default: cleanTenantId },
+    createdAt: { type: Date, default: Date.now }
+  });
+
   const TenantUser = tenantDb.model("User", userSchema, "stu_database");
   const TenantCourseEnrollment = tenantDb.model("CourseEnrollment", courseEnrollmentSchema, "course_enrollments");
   const TenantExam = tenantDb.model("Exam", examSchema, "org_exams");
@@ -198,12 +214,13 @@ export const getTenantContext = (tenantId = "default") => {
   const TenantStaffUser = tenantDb.model("StaffUser", staffSchema, "staff_database");
   const TenantAttendance = tenantDb.model("Attendance", attendanceSchema, "attendance_records");
   const TenantBranch = tenantDb.model("Branch", branchSchema, "college_branches");
+  const TenantNotification = tenantDb.model("Notification", notificationSchema, "college_notifications");
 
-  // Auto-seed default branches if collection is empty
+  // Auto-seed default branches and initial announcements if collections are empty
   (async () => {
     try {
-      const count = await TenantBranch.countDocuments();
-      if (count === 0) {
+      const bCount = await TenantBranch.countDocuments();
+      if (bCount === 0) {
         const defaultBranches = [
           { branchCode: "CSE", branchName: "Computer Science & Engineering", status: "active", orgId: cleanTenantId },
           { branchCode: "ECE", branchName: "Electronics & Communication Engineering", status: "active", orgId: cleanTenantId },
@@ -214,6 +231,37 @@ export const getTenantContext = (tenantId = "default") => {
           { branchCode: "AIML", branchName: "Artificial Intelligence & Machine Learning", status: "active", orgId: cleanTenantId }
         ];
         await TenantBranch.insertMany(defaultBranches);
+      }
+
+      const nCount = await TenantNotification.countDocuments();
+      if (nCount === 0) {
+        const defaultAnnouncements = [
+          {
+            title: `${cleanTenantId.toUpperCase()} Academic Calendar & Semester Examination Schedule`,
+            description: `Official announcement: End semester examination schedules and lab evaluation guidelines have been published for all departments.`,
+            category: "Exams",
+            department: "all",
+            departments: ["all"],
+            year: "all",
+            priority: "urgent",
+            isNew: true,
+            createdBy: "Office of Controller of Examinations",
+            orgId: cleanTenantId
+          },
+          {
+            title: "Campus Placement Drive & Technical Skill Workshops",
+            description: "Special training sessions on Data Structures, Algorithms, and System Design are scheduled for 3rd and 4th-year students.",
+            category: "Events",
+            department: "all",
+            departments: ["all"],
+            year: "all",
+            priority: "high",
+            isNew: true,
+            createdBy: "Training & Placement Cell",
+            orgId: cleanTenantId
+          }
+        ];
+        await TenantNotification.insertMany(defaultAnnouncements);
       }
     } catch (seedErr) {}
   })();
@@ -250,6 +298,7 @@ export const getTenantContext = (tenantId = "default") => {
       StaffUser: TenantStaffUser,
       Attendance: TenantAttendance,
       Branch: TenantBranch,
+      Notification: TenantNotification,
       getBranchResultsModel
     }
   };
