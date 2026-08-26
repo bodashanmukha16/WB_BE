@@ -1,5 +1,5 @@
 import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
-import { getCache, setCache } from "../config/redisClient.js";
+import { getCache, setCache } from "../config/cacheManager.js";
 
 // In-memory cache for instant synchronous lookups across middleware & controllers
 let cachedCodeMap = { KH: "svck", A9: "aits", SITS: "s", JN: "jntu" };

@@ -9,7 +9,7 @@ import mongoose from "mongoose";
 import resolveStudentBranch from "../utils/branchResolver.js";
 import { getClientIp, getCandidateIps, isIpInPool } from "../utils/ipUtils.js";
 import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
-import { getCache, setCache, delCache, delPattern } from "../config/redisClient.js";
+import { getCache, setCache, delCache, delPattern } from "../config/cacheManager.js";
 
 /**
  * Detect client system IP

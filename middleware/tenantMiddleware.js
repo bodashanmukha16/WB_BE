@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import { getTenantContext } from "../utils/tenantConnectionManager.js";
 import { resolveOrgFromRollNumber, getCollegeCodeMap } from "../utils/rollNumberResolver.js";
 import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
-import { getCache, setCache } from "../config/redisClient.js";
+import { getCache, setCache } from "../config/cacheManager.js";
 
 /**
  * Express middleware to identify college organization dynamically and enforce subscription validity.

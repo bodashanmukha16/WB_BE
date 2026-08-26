@@ -1,7 +1,7 @@
 import getTenantContext from "../../utils/tenantConnectionManager.js";
 import { getBranchResultsModel } from "../../utils/resultsDbManager.js";
 import { getSuperAdminDb } from "../../super_admin_backend/utils/superAdminDb.js";
-import { delPattern } from "../../config/redisClient.js";
+import { delPattern } from "../../config/cacheManager.js";
 
 const getTenantExamModels = (req) => {
   if (req.tenantModels && req.tenantModels.Exam) {

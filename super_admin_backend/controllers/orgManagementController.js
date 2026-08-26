@@ -1,7 +1,7 @@
 import getSuperAdminDb from '../utils/superAdminDb.js';
 import getTenantContext from '../../utils/tenantConnectionManager.js';
 import { refreshCollegeCodeMap } from '../../utils/rollNumberResolver.js';
-import { delCache } from '../../config/redisClient.js';
+import { delCache } from '../../config/cacheManager.js';
 import fs from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
