@@ -1,5 +1,4 @@
 import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
-import { getCache, setCache } from "../config/cacheManager.js";
 
 // In-memory cache for instant synchronous lookups across middleware & controllers
 let cachedCodeMap = { KH: "svck", A9: "aits", SITS: "s", JN: "jntu" };
@@ -7,31 +6,25 @@ let isSyncing = false;
 let lastSyncTime = 0;
 
 /**
- * Asynchronously refreshes the college code map directly from Redis cache / MongoDB OrganizationRegistry.
+ * Asynchronously refreshes the college code map directly from MongoDB OrganizationRegistry.
  */
 export const refreshCollegeCodeMap = async () => {
   try {
-    // 1. Try Redis cache first
-    const redisCodeMap = await getCache("system:college_code_map");
-    if (redisCodeMap && Object.keys(redisCodeMap).length > 0) {
-      cachedCodeMap = redisCodeMap;
-      lastSyncTime = Date.now();
-      return cachedCodeMap;
-    }
-
-    // 2. Query MongoDB OrganizationRegistry on cache miss
     const { OrganizationRegistry } = getSuperAdminDb();
-    const orgs = await OrganizationRegistry.find({ status: "active" }).lean();
+    const orgs = await OrganizationRegistry.find({}).lean();
     if (orgs && orgs.length > 0) {
       const newMap = {};
       for (const org of orgs) {
-        if (org.code && org.orgId) {
-          newMap[org.code.toUpperCase()] = org.orgId.toLowerCase();
+        if (org.orgId) {
+          const cleanOrgId = org.orgId.toLowerCase();
+          newMap[cleanOrgId.toUpperCase()] = cleanOrgId;
+          if (org.code) {
+            newMap[org.code.toUpperCase()] = cleanOrgId;
+          }
         }
       }
       cachedCodeMap = newMap;
       lastSyncTime = Date.now();
-      await setCache("system:college_code_map", newMap, 1800); // 30 minutes cache TTL
     }
   } catch (err) {
     // Fallback to process.env if MongoDB connection is not ready
@@ -62,13 +55,17 @@ export const getCollegeCodeMap = () => {
  */
 export const resolveOrgFromRollNumber = (input = "") => {
   const codeMap = getCollegeCodeMap();
-  const defaultOrg = Object.values(codeMap)[0] || "svck";
+  const defaultOrg = codeMap["SVCK"] || codeMap["KH"] || "svck";
   if (!input) return defaultOrg;
 
   const str = input.toString().trim().toUpperCase();
   const lowerStr = str.toLowerCase();
 
-  // 1. Scan configured codes and orgIds strictly from active MongoDB registry
+  // 1. Explicit text pattern checks for known codes
+  if (str.includes("SVCK") || str.includes("SV") || str.includes("KH")) return "svck";
+  if (str.includes("AITS") || str.includes("A9")) return "aits";
+
+  // 2. Scan configured codes and orgIds strictly from active MongoDB registry
   for (const [code, orgId] of Object.entries(codeMap)) {
     const cleanCode = code.toUpperCase();
     const cleanOrgId = orgId.toLowerCase();
@@ -78,7 +75,7 @@ export const resolveOrgFromRollNumber = (input = "") => {
     }
   }
 
-  // 2. Check 4-character code substring (e.g. '23SITS1A0501' -> 'SITS')
+  // 3. Check 4-character code substring (e.g. '23SITS1A0501' -> 'SITS')
   if (str.length >= 6) {
     const fourChar = str.substring(2, 6);
     if (codeMap[fourChar]) {
@@ -86,7 +83,7 @@ export const resolveOrgFromRollNumber = (input = "") => {
     }
   }
 
-  // 3. Check 2-character code substring at index 2 & 3 (e.g. '19KH1A0512' -> 'KH', '23A91A0401' -> 'A9')
+  // 4. Check 2-character code substring at index 2 & 3 (e.g. '19KH1A0512' -> 'KH', '23A91A0401' -> 'A9')
   if (str.length >= 4) {
     const codeAtPos = str.substring(2, 4);
     if (codeMap[codeAtPos]) {

@@ -1,7 +1,6 @@
 import getTenantContext from "../../utils/tenantConnectionManager.js";
 import { getBranchResultsModel } from "../../utils/resultsDbManager.js";
 import { getSuperAdminDb } from "../../super_admin_backend/utils/superAdminDb.js";
-import { delPattern } from "../../config/cacheManager.js";
 
 const getTenantExamModels = (req) => {
   if (req.tenantModels && req.tenantModels.Exam) {
@@ -142,10 +141,6 @@ export const createExam = async (req, res) => {
       await ExamQuestion.insertMany(questionDocs);
     }
 
-    // Invalidate Redis Exam Caches for this organization
-    await delPattern(`org_exams:${orgId}:*`);
-    await delPattern(`exam_details:${orgId}:*`);
-
     res.status(201).json({
       success: true,
       message: "Examination created successfully in Org DB",
@@ -192,10 +187,6 @@ export const updateExam = async (req, res) => {
       }
     }
 
-    // Invalidate Redis Exam Caches for this organization and specific exam
-    await delPattern(`org_exams:${orgId}:*`);
-    await delPattern(`exam_details:${orgId}:*`);
-
     res.status(200).json({
       success: true,
       message: "Examination updated successfully",
@@ -220,10 +211,6 @@ export const deleteExam = async (req, res) => {
     }
 
     await ExamQuestion.deleteMany({ examId: id });
-
-    // Invalidate Redis Exam Caches for this organization and specific exam
-    await delPattern(`org_exams:${orgId}:*`);
-    await delPattern(`exam_details:${orgId}:*`);
 
     res.status(200).json({
       success: true,

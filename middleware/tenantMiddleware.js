@@ -2,7 +2,6 @@ import jwt from "jsonwebtoken";
 import { getTenantContext } from "../utils/tenantConnectionManager.js";
 import { resolveOrgFromRollNumber, getCollegeCodeMap } from "../utils/rollNumberResolver.js";
 import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
-import { getCache, setCache } from "../config/cacheManager.js";
 
 /**
  * Express middleware to identify college organization dynamically and enforce subscription validity.
@@ -17,12 +16,20 @@ export const tenantMiddleware = async (req, res, next) => {
 
     let tenantId = null;
 
-    // 1. Resolve from explicit request header (Highest Priority)
-    if (req.headers["x-tenant-id"] && req.headers["x-tenant-id"] !== "undefined" && req.headers["x-tenant-id"] !== "null") {
+    // 1. Resolve from request body credentials FIRST if username/roll number/email is provided (Highest Priority during Auth/Login)
+    if (req.body) {
+      const userIdentifier = req.body.username || req.body.userId || req.body.studentEmail || req.body.emailOrStaffId || req.body.email;
+      if (userIdentifier && userIdentifier.length >= 2) {
+        tenantId = resolveOrgFromRollNumber(userIdentifier);
+      }
+    }
+
+    // 2. Resolve from explicit request header if not resolved from body
+    if (!tenantId && req.headers["x-tenant-id"] && req.headers["x-tenant-id"] !== "undefined" && req.headers["x-tenant-id"] !== "null") {
       tenantId = req.headers["x-tenant-id"];
     }
 
-    // 2. Decode JWT Bearer Token if present & extract User Context
+    // 3. Decode JWT Bearer Token if present & extract User Context
     let userRole = req.headers["x-user-role"] || req.headers["x-staff-role"] || null;
     let userDept = req.headers["x-user-branch"] || req.headers["x-user-dept"] || req.headers["x-staff-dept"] || null;
 
@@ -57,14 +64,6 @@ export const tenantMiddleware = async (req, res, next) => {
     req.userRole = userRole ? userRole.toString().toLowerCase().trim() : "admin";
     req.userDept = userDept ? userDept.toString().toLowerCase().trim() : "all";
 
-    // 3. Check request body identifiers if username/roll number/email
-    if (!tenantId && req.body) {
-      const userIdentifier = req.body.username || req.body.userId || req.body.studentEmail || req.body.emailOrStaffId || req.body.email;
-      if (userIdentifier && userIdentifier.length >= 2) {
-        tenantId = resolveOrgFromRollNumber(userIdentifier);
-      }
-    }
-
     // 4. Extract roll number from request URL path ONLY if it matches a student roll number pattern
     if (!tenantId && req.originalUrl) {
       const urlSegments = req.originalUrl.split("?")[0].split("/");
@@ -85,31 +84,21 @@ export const tenantMiddleware = async (req, res, next) => {
     const codeMap = getCollegeCodeMap();
     const resolvedOrgId = (codeMap[cleanTenantId.toUpperCase()] || cleanTenantId).toLowerCase().trim();
 
-    // 6. ENFORCE VALIDITY CHECK IN SUPER ADMIN ORGANIZATION REGISTRY (with Redis Cache Acceleration)
+    // 6. ENFORCE VALIDITY CHECK IN SUPER ADMIN ORGANIZATION REGISTRY (Direct Database Query)
     try {
-      const cacheKey = `org_validity:${resolvedOrgId}`;
-      let orgRecord = await getCache(cacheKey);
-
-      if (!orgRecord) {
-        const { OrganizationRegistry } = getSuperAdminDb();
-        
-        // Flexible query matching orgId, code, or dbName
-        const dbRecord = await OrganizationRegistry.findOne({
-          $or: [
-            { orgId: resolvedOrgId },
-            { orgId: cleanTenantId },
-            { code: cleanTenantId.toUpperCase() },
-            { code: resolvedOrgId.toUpperCase() },
-            { dbName: `wb_org_${resolvedOrgId}` },
-            { dbName: `wb_org_${cleanTenantId}` }
-          ]
-        }).lean();
-
-        if (dbRecord) {
-          orgRecord = dbRecord;
-          await setCache(cacheKey, dbRecord, 600); // 10 minutes cache TTL
-        }
-      }
+      const { OrganizationRegistry } = getSuperAdminDb();
+      
+      // Flexible query matching orgId, code, or dbName
+      const orgRecord = await OrganizationRegistry.findOne({
+        $or: [
+          { orgId: resolvedOrgId },
+          { orgId: cleanTenantId },
+          { code: cleanTenantId.toUpperCase() },
+          { code: resolvedOrgId.toUpperCase() },
+          { dbName: `wb_org_${resolvedOrgId}` },
+          { dbName: `wb_org_${cleanTenantId}` }
+        ]
+      }).lean();
 
       if (orgRecord) {
         const now = new Date();

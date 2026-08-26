@@ -1,7 +1,6 @@
 import getSuperAdminDb from '../utils/superAdminDb.js';
 import getTenantContext from '../../utils/tenantConnectionManager.js';
 import { refreshCollegeCodeMap } from '../../utils/rollNumberResolver.js';
-import { delCache, delPattern } from '../../config/cacheManager.js';
 import fs from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
@@ -364,9 +363,7 @@ export const onboardOrganization = async (req, res) => {
       planType
     });
 
-    // 4. Refresh in-memory Organization College Code Cache & clear all validity cache entries
-    await delPattern("org_validity:*");
-    await delCache("system:college_code_map");
+    // 4. Refresh in-memory Organization College Code Map
     await refreshCollegeCodeMap();
 
     res.status(201).json({
@@ -419,8 +416,6 @@ export const updateOrgValidity = async (req, res) => {
     org.updatedAt = new Date();
     await org.save();
 
-    await delPattern("org_validity:*");
-    await delCache("system:college_code_map");
     await refreshCollegeCodeMap();
 
     res.status(200).json({
