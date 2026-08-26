@@ -194,28 +194,26 @@ export const staffLogin = async (req, res) => {
   }
 };
 
-// Fetch All Staff Members from physical Org DB
+// Fetch All Staff Members from physical Org DB (Admin/Principal = All Branches, HOD/Staff = Branch Scoped)
 export const getAllStaff = async (req, res) => {
   try {
     const { department, role } = req.query;
     const orgId = (req.headers["x-tenant-id"] || req.tenantId || "svck").toLowerCase().trim();
 
     const queryRole = (req.query.role || req.headers["x-user-role"] || req.headers["x-staff-role"] || req.userRole || req.staffUser?.role || "admin").toString().toLowerCase().trim();
-    const queryDept = (department || req.headers["x-user-branch"] || req.headers["x-user-dept"] || req.headers["x-staff-dept"] || req.userDept || req.staffUser?.department || "all").toString().toLowerCase().trim();
+    const queryDept = (req.headers["x-user-branch"] || req.headers["x-user-dept"] || req.headers["x-staff-dept"] || req.userDept || req.staffUser?.department || "all").toString().toLowerCase().trim();
+
+    const isAdminOrPrincipal = queryRole === "admin" || queryRole === "principal" || queryRole === "superadmin" || (req.staffUser?.role === "admin" || req.staffUser?.role === "principal");
 
     const TenantStaff = getTenantStaffModel(req, orgId);
     const filter = {};
 
-    let targetDept = queryDept;
-    if ((queryRole === "hod" || queryRole === "lecturer") && queryDept !== "all") {
-      targetDept = queryDept;
-    }
-
-    if (targetDept && targetDept !== "all") {
-      filter.$or = [
-        { department: new RegExp(`^${targetDept.trim()}$`, "i") },
-        { department: "all" }
-      ];
+    if (!isAdminOrPrincipal && queryDept !== "all") {
+      // Branch HOD / Lecturer -> Strictly scope to their branch faculty only!
+      filter.department = new RegExp(`^${queryDept.trim()}$`, "i");
+    } else if (department && department !== "all") {
+      // Admin / Principal explicit dropdown filter
+      filter.department = new RegExp(`^${department.trim()}$`, "i");
     }
 
     if (role && role !== "all") {

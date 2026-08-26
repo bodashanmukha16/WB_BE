@@ -122,14 +122,24 @@ export const getAttendanceHistory = async (req, res) => {
     const orgId = (req.headers["x-tenant-id"] || req.tenantId || "jntuk").toLowerCase().trim();
     const { Attendance: TenantAttendance } = getTenantModels(req);
 
+    const queryRole = (req.query.role || req.headers["x-user-role"] || req.headers["x-staff-role"] || req.userRole || req.staffUser?.role || "admin").toString().toLowerCase().trim();
+    const queryDept = (req.headers["x-user-branch"] || req.headers["x-user-dept"] || req.headers["x-staff-dept"] || req.userDept || req.staffUser?.department || "all").toString().toLowerCase().trim();
+
+    const isAdminOrPrincipal = queryRole === "admin" || queryRole === "principal" || queryRole === "superadmin" || (req.staffUser?.role === "admin" || req.staffUser?.role === "principal");
+
     const filter = {};
 
-    if (department && department !== "all") {
-      filter.department = department.toLowerCase();
+    if (!isAdminOrPrincipal && queryDept !== "all") {
+      // HOD / Lecturer -> Strictly scope to their branch attendance!
+      filter.department = new RegExp(`^${queryDept.trim()}$`, "i");
+    } else if (department && department !== "all") {
+      // Admin / Principal explicit dropdown filter
+      filter.department = new RegExp(`^${department.trim()}$`, "i");
     }
-    if (year) filter.year = Number(year);
-    if (section) filter.section = section;
-    if (subjectCode) filter.subjectCode = subjectCode;
+
+    if (year && year !== "all") filter.year = Number(year);
+    if (section && section !== "all") filter.section = section;
+    if (subjectCode && subjectCode !== "all") filter.subjectCode = subjectCode;
     if (date) filter.date = date;
 
     let history = await TenantAttendance.find(filter).sort({ date: -1, createdAt: -1 });

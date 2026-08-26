@@ -23,19 +23,20 @@ export const getAllStudents = async (req, res) => {
 
     const filter = { role: "student" };
 
-    let targetDept = department;
-    const staffRole = req.staffUser?.role || req.user?.role;
-    const staffDept = req.staffUser?.department || req.user?.department;
+    const queryRole = (req.query.role || req.headers["x-user-role"] || req.headers["x-staff-role"] || req.userRole || req.staffUser?.role || "admin").toString().toLowerCase().trim();
+    const queryDept = (req.headers["x-user-branch"] || req.headers["x-user-dept"] || req.headers["x-staff-dept"] || req.userDept || req.staffUser?.department || "all").toString().toLowerCase().trim();
 
-    if ((staffRole === "hod" || staffRole === "lecturer") && staffDept && staffDept !== "all") {
-      targetDept = staffDept;
+    const isAdminOrPrincipal = queryRole === "admin" || queryRole === "principal" || queryRole === "superadmin" || (req.staffUser?.role === "admin" || req.staffUser?.role === "principal");
+
+    if (!isAdminOrPrincipal && queryDept !== "all") {
+      // HOD / Lecturer -> Strictly scope to their branch!
+      filter.branch = new RegExp(`^${queryDept.trim()}$`, "i");
+    } else if (department && department !== "all") {
+      // Admin / Principal explicit dropdown filter
+      filter.branch = new RegExp(`^${department.trim()}$`, "i");
     }
 
-    if (targetDept && targetDept !== "all") {
-      filter.branch = new RegExp(`^${targetDept.trim()}$`, "i");
-    }
-
-    if (year) {
+    if (year && year !== "all") {
       filter.year = Number(year);
     }
 
