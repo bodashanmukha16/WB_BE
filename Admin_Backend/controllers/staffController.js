@@ -132,6 +132,40 @@ export const staffLogin = async (req, res) => {
 
     const resolvedFinalOrgId = (staff.orgId || finalOrgId || "svck").toLowerCase().trim();
 
+    // ENFORCE ORGANIZATION SUBSCRIPTION VALIDITY CHECK
+    try {
+      const { OrganizationRegistry } = getSuperAdminDb();
+      const orgRecord = await OrganizationRegistry.findOne({
+        $or: [
+          { orgId: resolvedFinalOrgId },
+          { code: resolvedFinalOrgId.toUpperCase() },
+          { dbName: `wb_org_${resolvedFinalOrgId}` }
+        ]
+      });
+
+      if (orgRecord) {
+        const now = new Date();
+        if (orgRecord.status === 'suspended') {
+          console.warn(`⛔ LOGIN BLOCKED: Staff '${staff.staffId}' belongs to SUSPENDED Institution '${orgRecord.name}' [${orgRecord.orgId}].`);
+          return res.status(403).json({
+            success: false,
+            error: "ORGANIZATION_SUSPENDED",
+            message: `Institution '${orgRecord.name}' subscription is currently SUSPENDED. Access to administrative portal is blocked. Please contact Super Admin.`
+          });
+        }
+        if (orgRecord.status === 'expired' || (orgRecord.validUntil && new Date(orgRecord.validUntil) < now)) {
+          console.warn(`⛔ LOGIN BLOCKED: Staff '${staff.staffId}' belongs to EXPIRED Institution '${orgRecord.name}' [${orgRecord.orgId}].`);
+          return res.status(403).json({
+            success: false,
+            error: "SUBSCRIPTION_EXPIRED",
+            message: `Institution '${orgRecord.name}' subscription has expired. Access to administrative portal is blocked. Please contact Super Admin to renew.`
+          });
+        }
+      }
+    } catch (orgErr) {
+      console.error("Error verifying org status during staff login:", orgErr.message);
+    }
+
     const token = jwt.sign(
       {
         id: staff._id,

@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import { getTenantContext } from "../utils/tenantConnectionManager.js";
 import { resolveOrgFromRollNumber } from "../utils/rollNumberResolver.js";
 import { resolveStudentBranch } from "../utils/branchResolver.js";
+import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
 
 export const login = async (req, res) => {
   const { username, password } = req.body;
@@ -81,6 +82,41 @@ export const login = async (req, res) => {
 
     // Determine final orgId: Target Org ID derived from roll number code in .env takes highest priority!
     const finalOrgId = targetOrgId || user.orgId || "jntuk";
+    const cleanFinalOrgId = finalOrgId.toLowerCase().trim();
+
+    // ENFORCE ORGANIZATION SUBSCRIPTION VALIDITY CHECK
+    try {
+      const { OrganizationRegistry } = getSuperAdminDb();
+      const orgRecord = await OrganizationRegistry.findOne({
+        $or: [
+          { orgId: cleanFinalOrgId },
+          { code: cleanFinalOrgId.toUpperCase() },
+          { dbName: `wb_org_${cleanFinalOrgId}` }
+        ]
+      });
+
+      if (orgRecord) {
+        const now = new Date();
+        if (orgRecord.status === 'suspended') {
+          console.warn(`⛔ LOGIN BLOCKED: Student '${user.username}' belongs to SUSPENDED Institution '${orgRecord.name}' [${orgRecord.orgId}].`);
+          return res.status(403).json({
+            success: false,
+            error: "ORGANIZATION_SUSPENDED",
+            message: `Institution '${orgRecord.name}' subscription is currently SUSPENDED. Access to student portal & exam records is blocked. Please contact Super Admin.`
+          });
+        }
+        if (orgRecord.status === 'expired' || (orgRecord.validUntil && new Date(orgRecord.validUntil) < now)) {
+          console.warn(`⛔ LOGIN BLOCKED: Student '${user.username}' belongs to EXPIRED Institution '${orgRecord.name}' [${orgRecord.orgId}].`);
+          return res.status(403).json({
+            success: false,
+            error: "SUBSCRIPTION_EXPIRED",
+            message: `Institution '${orgRecord.name}' subscription has expired. Access to student portal & exam records is blocked. Please contact Super Admin to renew.`
+          });
+        }
+      }
+    } catch (orgErr) {
+      console.error("Error verifying org status during student login:", orgErr.message);
+    }
     const organization = user.organization || (
       finalOrgId === "aits" ? "AITS Rajampet" : "JNTUK College of Engineering"
     );
