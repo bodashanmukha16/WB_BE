@@ -1,4 +1,5 @@
 import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
+import { getCache, setCache } from "../config/redisClient.js";
 
 // In-memory cache for instant synchronous lookups across middleware & controllers
 let cachedCodeMap = { KH: "svck", A9: "aits", SITS: "s", JN: "jntu" };
@@ -6,12 +7,21 @@ let isSyncing = false;
 let lastSyncTime = 0;
 
 /**
- * Asynchronously refreshes the college code map directly from MongoDB OrganizationRegistry.
+ * Asynchronously refreshes the college code map directly from Redis cache / MongoDB OrganizationRegistry.
  */
 export const refreshCollegeCodeMap = async () => {
   try {
+    // 1. Try Redis cache first
+    const redisCodeMap = await getCache("system:college_code_map");
+    if (redisCodeMap && Object.keys(redisCodeMap).length > 0) {
+      cachedCodeMap = redisCodeMap;
+      lastSyncTime = Date.now();
+      return cachedCodeMap;
+    }
+
+    // 2. Query MongoDB OrganizationRegistry on cache miss
     const { OrganizationRegistry } = getSuperAdminDb();
-    const orgs = await OrganizationRegistry.find({ status: "active" });
+    const orgs = await OrganizationRegistry.find({ status: "active" }).lean();
     if (orgs && orgs.length > 0) {
       const newMap = {};
       for (const org of orgs) {
@@ -21,6 +31,7 @@ export const refreshCollegeCodeMap = async () => {
       }
       cachedCodeMap = newMap;
       lastSyncTime = Date.now();
+      await setCache("system:college_code_map", newMap, 1800); // 30 minutes cache TTL
     }
   } catch (err) {
     // Fallback to process.env if MongoDB connection is not ready

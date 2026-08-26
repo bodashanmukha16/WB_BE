@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { getTenantContext } from "../utils/tenantConnectionManager.js";
 import { resolveOrgFromRollNumber, getCollegeCodeMap } from "../utils/rollNumberResolver.js";
 import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
+import { getCache, setCache } from "../config/redisClient.js";
 
 /**
  * Express middleware to identify college organization dynamically and enforce subscription validity.
@@ -62,21 +63,31 @@ export const tenantMiddleware = async (req, res, next) => {
     const codeMap = getCollegeCodeMap();
     const resolvedOrgId = (codeMap[cleanTenantId.toUpperCase()] || cleanTenantId).toLowerCase().trim();
 
-    // 6. ENFORCE VALIDITY CHECK IN SUPER ADMIN ORGANIZATION REGISTRY
+    // 6. ENFORCE VALIDITY CHECK IN SUPER ADMIN ORGANIZATION REGISTRY (with Redis Cache Acceleration)
     try {
-      const { OrganizationRegistry } = getSuperAdminDb();
-      
-      // Flexible query matching orgId, code, or dbName
-      const orgRecord = await OrganizationRegistry.findOne({
-        $or: [
-          { orgId: resolvedOrgId },
-          { orgId: cleanTenantId },
-          { code: cleanTenantId.toUpperCase() },
-          { code: resolvedOrgId.toUpperCase() },
-          { dbName: `wb_org_${resolvedOrgId}` },
-          { dbName: `wb_org_${cleanTenantId}` }
-        ]
-      });
+      const cacheKey = `org_validity:${resolvedOrgId}`;
+      let orgRecord = await getCache(cacheKey);
+
+      if (!orgRecord) {
+        const { OrganizationRegistry } = getSuperAdminDb();
+        
+        // Flexible query matching orgId, code, or dbName
+        const dbRecord = await OrganizationRegistry.findOne({
+          $or: [
+            { orgId: resolvedOrgId },
+            { orgId: cleanTenantId },
+            { code: cleanTenantId.toUpperCase() },
+            { code: resolvedOrgId.toUpperCase() },
+            { dbName: `wb_org_${resolvedOrgId}` },
+            { dbName: `wb_org_${cleanTenantId}` }
+          ]
+        }).lean();
+
+        if (dbRecord) {
+          orgRecord = dbRecord;
+          await setCache(cacheKey, dbRecord, 600); // 10 minutes cache TTL
+        }
+      }
 
       if (orgRecord) {
         const now = new Date();

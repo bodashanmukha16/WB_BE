@@ -1,6 +1,7 @@
 import getSuperAdminDb from '../utils/superAdminDb.js';
 import getTenantContext from '../../utils/tenantConnectionManager.js';
 import { refreshCollegeCodeMap } from '../../utils/rollNumberResolver.js';
+import { delCache } from '../../config/redisClient.js';
 import fs from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
@@ -363,7 +364,8 @@ export const onboardOrganization = async (req, res) => {
       planType
     });
 
-    // 4. Refresh in-memory Organization College Code Cache
+    // 4. Refresh in-memory Organization College Code Cache & clear Redis cache
+    await delCache([`org_validity:${orgId}`, "system:college_code_map"]);
     await refreshCollegeCodeMap();
 
     res.status(201).json({
@@ -416,6 +418,7 @@ export const updateOrgValidity = async (req, res) => {
     org.updatedAt = new Date();
     await org.save();
 
+    await delCache([`org_validity:${org.orgId.toLowerCase()}`, "system:college_code_map"]);
     await refreshCollegeCodeMap();
 
     res.status(200).json({

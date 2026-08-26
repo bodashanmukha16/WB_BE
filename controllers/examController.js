@@ -9,6 +9,7 @@ import mongoose from "mongoose";
 import resolveStudentBranch from "../utils/branchResolver.js";
 import { getClientIp, getCandidateIps, isIpInPool } from "../utils/ipUtils.js";
 import getSuperAdminDb from "../super_admin_backend/utils/superAdminDb.js";
+import { getCache, setCache, delCache, delPattern } from "../config/redisClient.js";
 
 /**
  * Detect client system IP
@@ -176,8 +177,14 @@ export const getOrgExams = async (req, res) => {
     const tenantId = req.tenantId || req.headers["x-tenant-id"] || "svck";
     const departmentQuery = req.query.department || req.query.branch || req.headers["x-user-branch"];
     const yearQuery = req.query.year || req.headers["x-user-year"];
+
+    const cacheKey = `org_exams:${tenantId}:${departmentQuery || 'all'}:${yearQuery || 'all'}`;
+    const cachedExams = await getCache(cacheKey);
+    if (cachedExams) {
+      return res.status(200).json(cachedExams);
+    }
+
     const { Exam, ExamQuestion } = req.tenantModels || {};
-    console.log(yearQuery);
     let exams = [];
     if (Exam) {
       const rawExams = await Exam.find({}).sort({ createdAt: -1 });
@@ -222,12 +229,16 @@ export const getOrgExams = async (req, res) => {
       }
     }
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       orgId: tenantId,
       count: exams.length,
       exams
-    });
+    };
+
+    await setCache(cacheKey, responsePayload, 600); // 10 minutes Redis TTL
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     console.error("Error fetching org exams:", error);
     res.status(500).json({ success: false, message: "Server error fetching exams" });
@@ -237,6 +248,14 @@ export const getOrgExams = async (req, res) => {
 export const getExamById = async (req, res) => {
   try {
     const { id } = req.params;
+    const tenantId = req.tenantId || req.headers["x-tenant-id"] || "svck";
+
+    const cacheKey = `exam_details:${tenantId}:${id}`;
+    const cachedExam = await getCache(cacheKey);
+    if (cachedExam) {
+      return res.status(200).json(cachedExam);
+    }
+
     const { Exam, ExamQuestion } = req.tenantModels || {};
 
     if (!Exam) {
@@ -274,10 +293,14 @@ export const getExamById = async (req, res) => {
       }
     }
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       exam: examObj
-    });
+    };
+
+    await setCache(cacheKey, responsePayload, 600); // 10 minutes Redis TTL
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     console.error("Error fetching exam details:", error);
     res.status(500).json({ success: false, message: "Server error fetching exam details" });
@@ -403,6 +426,10 @@ export const submitExam = async (req, res) => {
 
     console.log(`✅ Saved Exam Submission into Org DB [wb_org_${tenantId}] -> Collection [${resolvedBranch}_exam_results]`);
 
+    // Invalidate student exam history cache in Redis
+    await delPattern(`exam_history:${tenantId}:${userId}:*`);
+    await delPattern(`exam_history:${tenantId}:${resolvedRollNo}:*`);
+
     res.status(200).json({
       success: true,
       message: `Examination submitted successfully to Org DB [wb_org_${tenantId}] under collection [${resolvedBranch}_exam_results]`,
@@ -418,9 +445,16 @@ export const getExamHistory = async (req, res) => {
   try {
     const { userId } = req.params;
     const { branch } = req.query;
-    const { getBranchResultsModel } = req.tenantModels || {};
-
+    const tenantId = req.tenantId || req.headers["x-tenant-id"] || "svck";
     const resolvedBranch = resolveStudentBranch(branch || userId);
+
+    const cacheKey = `exam_history:${tenantId}:${userId}:${resolvedBranch}`;
+    const cachedHistory = await getCache(cacheKey);
+    if (cachedHistory) {
+      return res.status(200).json(cachedHistory);
+    }
+
+    const { getBranchResultsModel } = req.tenantModels || {};
     let submissions = [];
 
     if (getBranchResultsModel) {
@@ -443,11 +477,15 @@ export const getExamHistory = async (req, res) => {
       }
     }
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       count: submissions.length,
       submissions
-    });
+    };
+
+    await setCache(cacheKey, responsePayload, 300); // 5 minutes TTL
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     console.error("Error fetching exam history:", error);
     res.status(500).json({ success: false, message: "Server error fetching exam history" });
