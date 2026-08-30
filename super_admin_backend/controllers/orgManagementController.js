@@ -1,6 +1,7 @@
 import getSuperAdminDb from '../utils/superAdminDb.js';
 import getTenantContext from '../../utils/tenantConnectionManager.js';
 import { refreshCollegeCodeMap } from '../../utils/rollNumberResolver.js';
+import { sendOnboardingWelcomeEmails } from '../utils/onboardingEmailService.js';
 import fs from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
@@ -247,6 +248,8 @@ export const onboardOrganization = async (req, res) => {
       code: rawCode,
       logo,
       validityDays = 365,
+      superadminEmail: rawSuperadminEmail,
+      orgAdminEmail: rawOrgAdminEmail,
       contactEmail,
       planType = 'Enterprise',
       seedStudents = true
@@ -263,6 +266,8 @@ export const onboardOrganization = async (req, res) => {
     const code = rawCode.trim().toUpperCase();
     const dbName = `wb_org_${orgId}`;
     const logoUrl = logo || 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=150&auto=format&fit=crop&q=80';
+    const superadminEmail = rawSuperadminEmail || process.env.SUPERADMIN_EMAIL || process.env.EMAIL || 'superadmin@workbench.edu';
+    const orgAdminEmail = rawOrgAdminEmail || contactEmail || `admin@${orgId}.edu.in`;
 
     const { OrganizationRegistry } = getSuperAdminDb();
     const existing = await OrganizationRegistry.findOne({
@@ -335,7 +340,7 @@ export const onboardOrganization = async (req, res) => {
         {
           staffId: `STAFF_${code}_01`,
           fullname: `Dr. Head of Department (${code})`,
-          email: `hod@${orgId}.edu.in`,
+          email: orgAdminEmail,
           password: 'Staff@123',
           role: 'admin',
           department: 'CSE',
@@ -359,12 +364,29 @@ export const onboardOrganization = async (req, res) => {
       status: 'active',
       validFrom,
       validUntil,
-      contactEmail: contactEmail || `admin@${orgId}.edu.in`,
+      superadminEmail,
+      orgAdminEmail,
+      contactEmail: orgAdminEmail,
       planType
     });
 
     // 4. Refresh in-memory Organization College Code Map
     await refreshCollegeCodeMap();
+
+    // 5. Dispatch Welcome HTML Email to both SuperAdmin & OrgAdmin
+    sendOnboardingWelcomeEmails({
+      name,
+      orgId,
+      code,
+      dbName,
+      validUntil,
+      planType,
+      superadminEmail,
+      orgAdminEmail,
+      logoUrl
+    }).catch((emailErr) => {
+      console.warn("⚠️ Onboarding welcome email dispatch notice:", emailErr.message);
+    });
 
     res.status(201).json({
       success: true,

@@ -44,6 +44,14 @@ const organizationRegistrySchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  superadminEmail: {
+    type: String,
+    default: 'superadmin@workbench.edu'
+  },
+  orgAdminEmail: {
+    type: String,
+    default: ''
+  },
   planType: {
     type: String,
     enum: ['Trial', 'Standard', 'Enterprise'],
