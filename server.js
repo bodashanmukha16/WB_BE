@@ -10,6 +10,8 @@ import connectDB from './config/db.js';
 import { tenantMiddleware } from './middleware/tenantMiddleware.js';
 import initSuperAdminDatabase from './super_admin_backend/utils/initSuperAdmin.js';
 
+import { getNotifications } from './Admin_Backend/controllers/notificationController.js';
+
 dotenv.config();
 
 const app = express();
@@ -28,6 +30,7 @@ app.use(tenantMiddleware);
 app.use("/api/auth", authRoutes)
 app.use("/api/enrollments", enrollmentRoutes)
 app.use("/api/exams", examRoutes)
+app.get("/api/notifications", getNotifications)
 app.use("/api/admin", adminRoutes)
 app.use("/api/superadmin", superAdminRoutes)
 

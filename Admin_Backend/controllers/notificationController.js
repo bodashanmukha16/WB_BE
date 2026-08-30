@@ -31,15 +31,20 @@ export const getNotifications = async (req, res) => {
     }
 
     if (year && year !== "all") {
-      const yrStr = String(year).trim();
+      const cleanYr = String(year).trim();
+      const numericYr = cleanYr.replace(/[^0-9]/g, "");
+      const yearConditions = [{ year: "all" }, { year: cleanYr }];
+      if (numericYr) {
+        yearConditions.push({ year: numericYr });
+      }
       if (filter.$or) {
         filter.$and = [
           { $or: filter.$or },
-          { $or: [{ year: "all" }, { year: yrStr }] }
+          { $or: yearConditions }
         ];
         delete filter.$or;
       } else {
-        filter.$or = [{ year: "all" }, { year: yrStr }];
+        filter.$or = yearConditions;
       }
     }
 
