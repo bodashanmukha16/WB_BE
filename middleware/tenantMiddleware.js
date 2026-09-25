@@ -16,20 +16,12 @@ export const tenantMiddleware = async (req, res, next) => {
 
     let tenantId = null;
 
-    // 1. Resolve from request body credentials FIRST if username/roll number/email is provided (Highest Priority during Auth/Login)
-    if (req.body) {
-      const userIdentifier = req.body.username || req.body.userId || req.body.studentEmail || req.body.emailOrStaffId || req.body.email;
-      if (userIdentifier && userIdentifier.length >= 2) {
-        tenantId = resolveOrgFromRollNumber(userIdentifier);
-      }
-    }
-
-    // 2. Resolve from explicit request header if not resolved from body
-    if (!tenantId && req.headers["x-tenant-id"] && req.headers["x-tenant-id"] !== "undefined" && req.headers["x-tenant-id"] !== "null") {
+    // 1. Resolve from explicit request header FIRST (Highest priority for active user session & frontend requests)
+    if (req.headers["x-tenant-id"] && req.headers["x-tenant-id"] !== "undefined" && req.headers["x-tenant-id"] !== "null") {
       tenantId = req.headers["x-tenant-id"];
     }
 
-    // 3. Decode JWT Bearer Token if present & extract User Context
+    // 2. Decode JWT Bearer Token if present & extract User Context
     let userRole = req.headers["x-user-role"] || req.headers["x-staff-role"] || null;
     let userDept = req.headers["x-user-branch"] || req.headers["x-user-dept"] || req.headers["x-staff-dept"] || null;
 
@@ -64,12 +56,26 @@ export const tenantMiddleware = async (req, res, next) => {
     req.userRole = userRole ? userRole.toString().toLowerCase().trim() : "admin";
     req.userDept = userDept ? userDept.toString().toLowerCase().trim() : "all";
 
-    // 4. Extract roll number from request URL path ONLY if it matches a student roll number pattern
+    // 3. Resolve from request body credentials ONLY IF NOT RESOLVED YET (e.g. unauthenticated login/auth routes)
+    if (!tenantId && req.body) {
+      const userIdentifier = req.body.username || req.body.userId || req.body.studentEmail || req.body.emailOrStaffId || req.body.email;
+      if (userIdentifier && userIdentifier.length >= 2) {
+        const matchedOrg = resolveOrgFromRollNumber(userIdentifier);
+        if (matchedOrg) {
+          tenantId = matchedOrg;
+        }
+      }
+    }
+
+    // 4. Extract roll number from request URL path ONLY IF NOT RESOLVED YET
     if (!tenantId && req.originalUrl) {
       const urlSegments = req.originalUrl.split("?")[0].split("/");
       const lastSegment = urlSegments[urlSegments.length - 1];
       if (lastSegment && lastSegment.length >= 4) {
-        tenantId = resolveOrgFromRollNumber(lastSegment);
+        const matchedOrg = resolveOrgFromRollNumber(lastSegment);
+        if (matchedOrg) {
+          tenantId = matchedOrg;
+        }
       }
     }
 

@@ -54,10 +54,9 @@ export const getCollegeCodeMap = () => {
  * using MongoDB organization registry with zero static .env dependency.
  */
 export const resolveOrgFromRollNumber = (input = "") => {
-  const codeMap = getCollegeCodeMap();
-  const defaultOrg = codeMap["SVCK"] || codeMap["KH"] || "svck";
-  if (!input) return defaultOrg;
+  if (!input) return null;
 
+  const codeMap = getCollegeCodeMap();
   const str = input.toString().trim().toUpperCase();
   const lowerStr = str.toLowerCase();
 
@@ -91,7 +90,7 @@ export const resolveOrgFromRollNumber = (input = "") => {
     }
   }
 
-  return defaultOrg;
+  return null;
 };
 
 export default resolveOrgFromRollNumber;

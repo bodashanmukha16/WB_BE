@@ -22,7 +22,7 @@ export const createEmailTransporter = () => {
 };
 
 /**
- * Generate rich, modern HTML template for Student Welcome Email
+ * Generate rich, modern HTML template for Student Welcome Email with WorkBench Branding
  */
 export const generateStudentWelcomeEmailHTML = ({
   fullname,
@@ -36,7 +36,7 @@ export const generateStudentWelcomeEmailHTML = ({
   collegeName = "SV College of Engineering",
   collegeCode = "SVCK",
   collegeLogo = "",
-  portalUrl = "http://localhost:5173"
+  portalUrl = "https://wb-fe.onrender.com/"
 }) => {
   const logoSrc = collegeLogo || "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=150&auto=format&fit=crop&q=80";
 
@@ -46,7 +46,7 @@ export const generateStudentWelcomeEmailHTML = ({
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Welcome to ${collegeName} - Student Portal Access</title>
+  <title>[WorkBench] Welcome to ${collegeName} - Student Account Setup</title>
   <!--[if mso]>
   <style type="text/css">
     body, table, td {font-family: Arial, Helvetica, sans-serif !important;}
@@ -72,27 +72,32 @@ export const generateStudentWelcomeEmailHTML = ({
         <!-- Main Email Container Card -->
         <table border="0" cellpadding="0" cellspacing="0" width="650" class="inner-container" style="background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4); border: 1px solid #334155; width: 650px;">
           
-          <!-- Top Vibrant Banner Header -->
+          <!-- Top Vibrant Banner Header with WorkBench & College Branding -->
           <tr>
-            <td style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #2563eb 100%); padding: 42px 35px; text-align: center; color: #ffffff;">
+            <td style="background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #312e81 70%, #4338ca 100%); padding: 42px 35px; text-align: center; color: #ffffff;">
               <table border="0" cellpadding="0" cellspacing="0" width="100%">
                 <tr>
                   <td align="center">
 
+                    <!-- WorkBench Brand Subhead -->
+                    <div style="font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 2.5px; color: #818cf8; margin-bottom: 16px;">
+                      ⚡ WORK<span style="color: #60a5fa;">BENCH</span> CAMPUS ERP
+                    </div>
+
                     <!-- College Logo -->
-                    <img src="${logoSrc}" alt="${collegeName}" width="72" height="72" style="display: block; width: 72px; height: 72px; border-radius: 20px; object-fit: cover; border: 3px solid rgba(255, 255, 255, 0.8); box-shadow: 0 10px 25px rgba(0,0,0,0.3); margin-bottom: 16px;" />
+                    <img src="${logoSrc}" alt="${collegeName}" width="72" height="72" style="display: block; width: 72px; height: 72px; border-radius: 20px; object-fit: cover; border: 3px solid rgba(255, 255, 255, 0.85); box-shadow: 0 10px 25px rgba(0,0,0,0.4); margin: 0 auto 16px auto;" />
 
                     <!-- Status Badge -->
-                    <span style="background: rgba(255, 255, 255, 0.2); color: #ffffff; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; padding: 6px 18px; border-radius: 50px; display: inline-block; margin-bottom: 14px; border: 1px solid rgba(255, 255, 255, 0.35);">
+                    <span style="background: rgba(255, 255, 255, 0.15); color: #ffffff; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; padding: 6px 18px; border-radius: 50px; display: inline-block; margin-bottom: 14px; border: 1px solid rgba(255, 255, 255, 0.3);">
                       🎓 OFFICIAL STUDENT ACCOUNT PROVISIONED
                     </span>
 
-                    <h1 style="margin: 0; font-size: 26px; font-weight: 900; line-height: 1.2; letter-spacing: -0.5px; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                    <h1 style="margin: 0; font-size: 26px; font-weight: 900; line-height: 1.2; letter-spacing: -0.5px; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
                       Welcome to ${collegeName}
                     </h1>
 
-                    <p style="margin: 8px 0 0 0; font-size: 14px; font-weight: 600; color: #e0e7ff; opacity: 0.95;">
-                      WorkBench Autonomous Student Portal • Code: ${collegeCode}
+                    <p style="margin: 8px 0 0 0; font-size: 14px; font-weight: 600; color: #c7d2fe; opacity: 0.95;">
+                      WorkBench Autonomous Student Portal &bull; Institution Code: <strong>${collegeCode}</strong>
                     </p>
                   </td>
                 </tr>
@@ -110,18 +115,18 @@ export const generateStudentWelcomeEmailHTML = ({
               </h2>
 
               <p style="margin: 0 0 26px 0; font-size: 15px; line-height: 1.7; color: #475569;">
-                Congratulations and welcome to <strong>${collegeName}</strong>! Your official student profile has been created in the institutional ERP database. You can now access your personal academic dashboard, track daily attendance, participate in online examinations, and review performance reports.
+                Congratulations and welcome to <strong>${collegeName}</strong>! Your official student account is now provisioned on the <strong>WorkBench Campus ERP Platform</strong>. You can now log into your personalized student portal to monitor attendance, access online examinations, check results, and track academic dossiers.
               </p>
 
               <!-- Academic Profile Parameters Header -->
-              <div style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #4f46e5; margin-bottom: 12px;">
+              <div style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #4338ca; margin-bottom: 12px;">
                 🏛️ Registered Student Profile
               </div>
 
               <!-- Student Profile Specifications Table -->
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 26px; background-color: #f8fafc; border-radius: 16px; border: 1px solid #e2e8f0; padding: 8px 16px;">
                 <tr>
-                  <td style="padding: 10px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; font-weight: 600; color: #64748b;">Full Name:</td>
+                  <td style="padding: 10px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; font-weight: 600; color: #64748b;">Full Student Name:</td>
                   <td align="right" style="padding: 10px 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; font-weight: 800; color: #0f172a;">${fullname || "N/A"}</td>
                 </tr>
                 <tr>
@@ -142,30 +147,30 @@ export const generateStudentWelcomeEmailHTML = ({
                 </tr>
               </table>
 
-              <!-- Credentials Box (Indigo / Violet Theme) -->
+              <!-- Credentials Box (Indigo / WorkBench Theme) -->
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f5f3ff; border-radius: 18px; border: 1px solid #ddd6fe; padding: 22px; margin-bottom: 28px;">
                 <tr>
                   <td>
-                    <div style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #5b21b6; margin-bottom: 14px;">
-                      🔑 Student Portal Access Credentials
+                    <div style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #4338ca; margin-bottom: 14px;">
+                      🔑 WorkBench Student Portal Access Credentials
                     </div>
                     <table border="0" cellpadding="0" cellspacing="0" width="100%">
                       <tr>
-                        <td style="padding: 6px 0; font-size: 13px; color: #5b21b6; font-weight: 600;">Login Username / Roll No:</td>
-                        <td align="right" style="padding: 6px 0; font-size: 14px; font-weight: 900; font-family: monospace; color: #4338ca;">${rollNumber}</td>
+                        <td style="padding: 6px 0; font-size: 13px; color: #4338ca; font-weight: 600;">Login Username / Roll No:</td>
+                        <td align="right" style="padding: 6px 0; font-size: 14px; font-weight: 900; font-family: monospace; color: #3730a3;">${rollNumber}</td>
                       </tr>
                       <tr>
-                        <td style="padding: 6px 0; font-size: 13px; color: #5b21b6; font-weight: 600;">Registered Email:</td>
+                        <td style="padding: 6px 0; font-size: 13px; color: #4338ca; font-weight: 600;">Registered Email:</td>
                         <td align="right" style="padding: 6px 0; font-size: 13px; font-weight: 800; font-family: monospace; color: #1e40af;">${email}</td>
                       </tr>
                       <tr>
-                        <td style="padding: 6px 0; font-size: 13px; color: #5b21b6; font-weight: 600;">Temporary Initial Password:</td>
+                        <td style="padding: 6px 0; font-size: 13px; color: #4338ca; font-weight: 600;">Temporary Initial Password:</td>
                         <td align="right" style="padding: 6px 0; font-size: 14px; font-weight: 900; font-family: monospace; color: #b91c1c; background: #fee2e2; padding: 4px 10px; border-radius: 6px; display: inline-block;">${password || "Student@123"}</td>
                       </tr>
                     </table>
 
-                    <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #c4b5fd; font-size: 12px; color: #6b21a8; font-weight: 600;">
-                      💡 <strong>Security Note:</strong> Please login and update your password immediately from your profile settings.
+                    <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #c4b5fd; font-size: 12px; color: #4338ca; font-weight: 600;">
+                      💡 <strong>Security Reminder:</strong> For security reasons, please log into your WorkBench account and change your password.
                     </div>
                   </td>
                 </tr>
@@ -173,28 +178,28 @@ export const generateStudentWelcomeEmailHTML = ({
 
               <!-- Student Portal Features Showcase -->
               <div style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #0f172a; margin-bottom: 12px;">
-                ⚡ What You Can Do On WorkBench Portal:
+                ⚡ WorkBench Student Portal Features:
               </div>
 
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 28px;">
                 <tr>
                   <td style="padding: 8px 0; font-size: 13px; color: #334155; font-weight: 600;">
-                    📊 <strong>Live Attendance Tracker</strong> &mdash; Monitor subject-wise & monthly attendance percentages.
+                    📊 <strong>Live Attendance Tracker</strong> &mdash; Monitor subject-wise & monthly attendance percentages in real-time.
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 8px 0; font-size: 13px; color: #334155; font-weight: 600;">
-                    📝 <strong>Online Exam System</strong> &mdash; Take proctored mid/semester exams with automated scoring.
+                    📝 <strong>Online Examination Engine</strong> &mdash; Take proctored mid & semester exams with immediate grade evaluation.
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 8px 0; font-size: 13px; color: #334155; font-weight: 600;">
-                    📜 <strong>Academic Master Dossier</strong> &mdash; View and download official transcript reports anytime.
+                    📜 <strong>Academic Master Dossier</strong> &mdash; Export verified student reports & grade sheets anytime.
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 8px 0; font-size: 13px; color: #334155; font-weight: 600;">
-                    🔔 <strong>Instant Announcements</strong> &mdash; Receive real-time circulars from your HOD and Principal.
+                    🔔 <strong>Instant Institutional Circulars</strong> &mdash; Receive real-time announcements from HOD and Principal offices.
                   </td>
                 </tr>
               </table>
@@ -203,8 +208,8 @@ export const generateStudentWelcomeEmailHTML = ({
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 28px 0 10px 0;">
                 <tr>
                   <td align="center">
-                    <a href="${portalUrl}" class="cta-btn" style="background: linear-gradient(135deg, #4f46e5 0%, #2563eb 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 50px; font-weight: 900; font-size: 15px; letter-spacing: 0.5px; display: inline-block; box-shadow: 0 12px 25px -5px rgba(79, 70, 229, 0.4);">
-                      LOGIN TO STUDENT PORTAL NOW &rarr;
+                    <a href="${portalUrl}" class="cta-btn" style="background: linear-gradient(135deg, #312e81 0%, #4338ca 50%, #2563eb 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 50px; font-weight: 900; font-size: 15px; letter-spacing: 0.5px; display: inline-block; box-shadow: 0 12px 25px -5px rgba(67, 56, 202, 0.45);">
+                      LOGIN TO WORKBENCH PORTAL NOW &rarr;
                     </a>
                   </td>
                 </tr>
@@ -216,9 +221,9 @@ export const generateStudentWelcomeEmailHTML = ({
           <!-- Footer Area -->
           <tr>
             <td style="background-color: #f8fafc; padding: 26px 35px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; line-height: 1.6;">
-              <p style="margin: 0; font-weight: 800; color: #334155; font-size: 13px;">${collegeName} &bull; WorkBench Campus ERP</p>
-              <p style="margin: 4px 0 0 0;">Automated Student Onboarding &bull; Academic Management System</p>
-              <p style="margin: 8px 0 0 0; font-size: 11px; color: #94a3b8;">This is an automated operational email. If you believe you received this by mistake, please contact college administration.</p>
+              <p style="margin: 0; font-weight: 900; color: #1e1b4b; font-size: 13px;">WorkBench Autonomous Campus ERP Platform</p>
+              <p style="margin: 4px 0 0 0; color: #475569; font-weight: 600;">Official Automated Onboarding for <strong>${collegeName}</strong> (${collegeCode})</p>
+              <p style="margin: 8px 0 0 0; font-size: 11px; color: #94a3b8;">This is an automated system notification from WorkBench ERP. If you have questions, please contact college administration.</p>
             </td>
           </tr>
 
@@ -298,16 +303,16 @@ export const sendStudentWelcomeEmail = async ({
     portalUrl
   });
 
-  // 3. Dispatch Email via Nodemailer Transporter
+  // 3. Dispatch Email via Nodemailer Transporter with WorkBench Brand Name in Subject & Sender
   try {
     const transporter = createEmailTransporter();
     const senderEmail = process.env.EMAIL || process.env.SMTP_USER || "no-reply@workbench.edu";
-    const fromAddress = `"${collegeName} - Student Portal" <${senderEmail}>`;
+    const fromAddress = `"${collegeName} - WorkBench ERP" <${senderEmail}>`;
 
     const info = await transporter.sendMail({
       from: fromAddress,
       to: email,
-      subject: `🎉 Welcome to ${collegeName}! Your Student Account Credentials [${rollNumber}]`,
+      subject: `[WorkBench] 🎉 Welcome to ${collegeName}! Your Student Account Credentials [${rollNumber}]`,
       html: htmlContent
     });
 
