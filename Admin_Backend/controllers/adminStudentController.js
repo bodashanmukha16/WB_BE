@@ -5,6 +5,7 @@ import Attendance from "../models/Attendance.js";
 import getTenantContext from "../../utils/tenantConnectionManager.js";
 import getSuperAdminDb from "../../super_admin_backend/utils/superAdminDb.js";
 import { getStudentBranchExamHistory } from "../../utils/resultsDbManager.js";
+import { sendStudentWelcomeEmail } from "../../utils/studentWelcomeEmailService.js";
 
 // Helper to resolve active organization tenant database model
 const getTenantUserModel = (req) => {
@@ -111,6 +112,21 @@ export const createStudent = async (req, res) => {
     });
 
     await newStudent.save();
+
+    // Trigger Student Welcome Email (asynchronous dispatch)
+    sendStudentWelcomeEmail({
+      fullname: newStudent.fullname,
+      rollNumber: newStudent.username,
+      email: newStudent.email,
+      password: password || "Student@123",
+      branch: newStudent.branch,
+      year: newStudent.year,
+      semester: newStudent.semester,
+      section: newStudent.section,
+      orgId
+    }).catch(err => {
+      console.error("⚠️ Background error sending student welcome email:", err.message);
+    });
 
     res.status(201).json({
       success: true,

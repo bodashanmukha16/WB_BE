@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import StaffUser from "../models/StaffUser.js";
 import Attendance from "../models/Attendance.js";
+import { sendStudentWelcomeEmail } from "../utils/studentWelcomeEmailService.js";
 
 // Fetch All Students (supports search, department, year, section filtering)
 export const getAllStudents = async (req, res) => {
@@ -71,6 +72,21 @@ export const createStudent = async (req, res) => {
     });
 
     await newStudent.save();
+
+    // Trigger Student Welcome Email (asynchronous dispatch)
+    sendStudentWelcomeEmail({
+      fullname: newStudent.fullname,
+      rollNumber: newStudent.username,
+      email: newStudent.email,
+      password: password || "Student@123",
+      branch: newStudent.branch,
+      year: newStudent.year,
+      semester: newStudent.semester || 1,
+      section: newStudent.section,
+      orgId: newStudent.orgId || "jntuk"
+    }).catch(err => {
+      console.error("⚠️ Background error sending student welcome email:", err.message);
+    });
 
     res.status(201).json({
       success: true,
