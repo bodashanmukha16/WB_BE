@@ -23,12 +23,35 @@ import {
   updateDocument,
   deleteDocument
 } from '../controllers/dbCrudController.js';
+import {
+  getPublicCompilers,
+  getPublicSoftwares,
+  getPublicCourses,
+  getPublicCourseById,
+  getAllCourses,
+  createCourse,
+  updateCourse,
+  deleteCourse,
+  assignCourse,
+  getAllCompilers,
+  createCompiler,
+  updateCompiler,
+  deleteCompiler,
+  getAllSoftwares,
+  createSoftware,
+  updateSoftware,
+  deleteSoftware
+} from '../controllers/catalogManagementController.js';
 import superAdminAuthMiddleware from '../middleware/superAdminAuthMiddleware.js';
 
 const router = express.Router();
 
-// --- Public Unauthenticated Organization Config Route ---
+// --- Public Unauthenticated Routes (Accessible to Student FE_WB) ---
 router.get('/public/organizations', getPublicOrganizations);
+router.get('/public/compilers', getPublicCompilers);
+router.get('/public/softwares', getPublicSoftwares);
+router.get('/public/courses', getPublicCourses);
+router.get('/public/courses/:id', getPublicCourseById);
 
 // --- Auth Routes ---
 router.post('/login', superAdminLogin);
@@ -48,6 +71,27 @@ router.post('/organizations/:orgId/ip-pool', superAdminAuthMiddleware, addOrgIpP
 router.delete('/organizations/:orgId/ip-pool/:ipId', superAdminAuthMiddleware, removeOrgIpPoolEntry);
 router.put('/organizations/:orgId/ip-toggle', superAdminAuthMiddleware, toggleOrgIpRestriction);
 
+// --- Super Admin Catalog CRUD & Provisioning Routes ---
+
+// Courses & Provisions
+router.get('/courses', superAdminAuthMiddleware, getAllCourses);
+router.post('/courses', superAdminAuthMiddleware, createCourse);
+router.put('/courses/:id', superAdminAuthMiddleware, updateCourse);
+router.delete('/courses/:id', superAdminAuthMiddleware, deleteCourse);
+router.post('/courses/:id/assign', superAdminAuthMiddleware, assignCourse);
+
+// Compilers
+router.get('/compilers', superAdminAuthMiddleware, getAllCompilers);
+router.post('/compilers', superAdminAuthMiddleware, createCompiler);
+router.put('/compilers/:id', superAdminAuthMiddleware, updateCompiler);
+router.delete('/compilers/:id', superAdminAuthMiddleware, deleteCompiler);
+
+// Softwares
+router.get('/softwares', superAdminAuthMiddleware, getAllSoftwares);
+router.post('/softwares', superAdminAuthMiddleware, createSoftware);
+router.put('/softwares/:id', superAdminAuthMiddleware, updateSoftware);
+router.delete('/softwares/:id', superAdminAuthMiddleware, deleteSoftware);
+
 // --- UI Database CRUD Studio Routes ---
 router.get('/crud/databases', superAdminAuthMiddleware, getDatabasesAndCollections);
 router.get('/crud/:dbName/:collectionName', superAdminAuthMiddleware, getCollectionDocuments);
@@ -56,3 +100,4 @@ router.put('/crud/:dbName/:collectionName/:id', superAdminAuthMiddleware, update
 router.delete('/crud/:dbName/:collectionName/:id', superAdminAuthMiddleware, deleteDocument);
 
 export default router;
+
