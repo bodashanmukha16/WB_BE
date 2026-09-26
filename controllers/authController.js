@@ -154,3 +154,68 @@ export const login = async (req, res) => {
     });
   }
 };
+
+/**
+ * Update student profile email in backend MongoDB database
+ */
+export const updateProfile = async (req, res) => {
+  try {
+    const { username, email } = req.body;
+    if (!username || !email) {
+      return res.status(400).json({ success: false, message: 'Username and email are required' });
+    }
+
+    const cleanUsername = String(username).trim();
+    const cleanEmail = String(email).trim();
+
+    const targetOrgId = resolveOrgFromRollNumber(cleanUsername);
+    const tenantCtx = getTenantContext(targetOrgId);
+    const TargetUserModel = tenantCtx.models.User;
+
+    const query = {
+      $or: [
+        { username: { $regex: new RegExp(`^${cleanUsername}$`, "i") } },
+        { email: { $regex: new RegExp(`^${cleanUsername}$`, "i") } }
+      ]
+    };
+
+    // 1. Update in target college database
+    let user = await TargetUserModel.findOneAndUpdate(
+      query,
+      { email: cleanEmail },
+      { new: true }
+    );
+
+    // 2. Also update in base database
+    let baseUser = await User.findOneAndUpdate(
+      query,
+      { email: cleanEmail },
+      { new: true }
+    );
+
+    if (!user && !baseUser) {
+      return res.status(404).json({ success: false, message: 'Student user record not found in database' });
+    }
+
+    const updated = user || baseUser;
+    console.log(`✅ Profile email updated in database for [${cleanUsername}] -> [${cleanEmail}]`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Profile email updated successfully in database',
+      user: {
+        id: updated._id,
+        username: updated.username,
+        email: updated.email,
+        name: updated.fullname || updated.username,
+        branch: updated.branch,
+        year: updated.year,
+        orgId: targetOrgId
+      }
+    });
+  } catch (error) {
+    console.error('Error updating profile email in database:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update email in database', error: error.message });
+  }
+};
+
