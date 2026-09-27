@@ -1,0 +1,200 @@
+name: Release Management & Render Deployment
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release Tag to Merge & Deploy (e.g. v1.0.0)'
+        required: false
+        default: 'latest'
+
+permissions:
+  contents: write
+
+jobs:
+  release-and-deploy:
+    name: Merge Release to release branch & Deploy to Render
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install dependencies (jq)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      # Step 1: Checkout codebase with full history
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Step 2: Configure Git & Merge Tag/Branch into 'release' branch
+      - name: Merge Release into 'release' branch
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Resolve source branch or release tag created in GitHub
+          SOURCE_BRANCH="${{ github.event.release.target_commitish || github.event.inputs.source_branch }}"
+          TAG_NAME="${{ github.event.release.tag_name || github.event.inputs.release_tag }}"
+
+          # Fallback default if not specified
+          if [ -z "$SOURCE_BRANCH" ]; then
+            SOURCE_BRANCH="master"
+          fi
+
+          MERGE_SOURCE="${TAG_NAME:-$SOURCE_BRANCH}"
+          if [ -z "$MERGE_SOURCE" ] || [ "$MERGE_SOURCE" == "latest" ]; then
+            MERGE_SOURCE="${{ github.sha }}"
+          fi
+
+          echo "📌 Source Branch selected for Release: $SOURCE_BRANCH"
+          echo "🏷️ Release Tag: ${TAG_NAME:-'N/A'}"
+          echo "🚀 Merging [$MERGE_SOURCE] -> [release] branch..."
+
+          # Fetch all remote branches & tags
+          git fetch origin --tags --prune
+
+          # Checkout or create local 'release' branch matching origin/release
+          if git ls-remote --heads origin release | grep -q 'refs/heads/release'; then
+            echo "Fetching existing 'release' branch from origin..."
+            git checkout -b release origin/release
+          else
+            echo "Creating new 'release' branch..."
+            git checkout -b release
+          fi
+
+          # Merge source tag/branch into 'release' branch
+          git merge $MERGE_SOURCE --no-ff -m "chore(release): Merge $MERGE_SOURCE ($SOURCE_BRANCH) into release branch [skip ci]"
+
+          # Push updated release branch back to GitHub
+          echo "Pushing release branch to origin..."
+          git push origin release
+
+      # Step 3: Trigger Render Production Pipeline via Deploy Hook
+      - name: Trigger Render Deploy Hook
+        run: |
+          echo "🔥 Invoking Render Deploy Hook..."
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
+
+      # Step 4: Wait for Render Production Deployment to complete
+      - name: Wait for Render Deployment
+        id: wait_deploy
+        run: |
+          echo "⏳ Monitoring Render deployment status..."
+          START=$(date +%s)
+
+          for i in {1..30}
+          do
+            STATUS=$(curl -s \
+              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys \
+              | jq -r '.[0].deploy.status')
+
+            echo "Current Render Deploy Status: $STATUS"
+
+            if [ "$STATUS" == "live" ]; then
+              END=$(date +%s)
+              echo "DEPLOY_TIME=$((END-START))" >> $GITHUB_ENV
+              echo "✅ Render deployment is LIVE!"
+              exit 0
+            fi
+
+            if [ "$STATUS" == "build_failed" ] || [ "$STATUS" == "deploy_failed" ] || [ "$STATUS" == "canceled" ]; then
+              echo "❌ Render deployment failed with status: $STATUS"
+              exit 1
+            fi
+
+            sleep 20
+          done
+
+          echo "❌ Timed out waiting for Render deployment."
+          exit 1
+
+      # Step 5: Send Success Email Notification
+      - name: Send Release Success Email
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: false
+          username: "workbench.portal@gmail.com"
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "🚀 [WB_BE] Production Release ${{ github.event.release.tag_name || 'Deployed' }} Successful"
+          to: ${{ github.event.release.author.email || github.actor }}@gmail.com,workbench.portal@gmail.com
+          from: "workbench.portal@gmail.com"
+          html_body: |
+            <div style="font-family: Arial, sans-serif; background:#f3f4f6; padding:30px;">
+              <div style="max-width:650px; margin:auto; background:#ffffff; border-radius:10px; padding:25px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+                
+                <div style="text-align:center; margin-bottom:20px;">
+                  <img src="https://res.cloudinary.com/dja3u3qwa/image/upload/v1771704478/logo_new_grbbdt.png" width="150" alt="WorkBench Logo"/>
+                </div>
+
+                <h2 style="color:#16a34a; text-align:center;">🚀 Backend Production Release Live!</h2>
+                <p>Hello Team,</p>
+                <p>A new release has been successfully merged into the <strong>release</strong> branch and deployed to Render Production.</p>
+
+                <table style="width:100%; border-collapse:collapse; margin-top:15px;">
+                  <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px;"><strong>Release Tag:</strong></td><td style="color:#2563eb; font-weight:bold;">${{ github.event.release.tag_name || 'Manual Release' }}</td></tr>
+                  <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px;"><strong>Release Name:</strong></td><td>${{ github.event.release.name || 'Backend Production Build' }}</td></tr>
+                  <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px;"><strong>Target Branch:</strong></td><td><code style="background:#e0e7ff; color:#3730a3; padding:2px 6px; border-radius:4px;">release</code></td></tr>
+                  <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px;"><strong>Status:</strong></td><td style="color:#16a34a; font-weight:bold;">LIVE ✅</td></tr>
+                  <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px;"><strong>Deployment Duration:</strong></td><td>${{ env.DEPLOY_TIME }} sec</td></tr>
+                </table>
+
+                <br/>
+
+                <div style="text-align:center; margin-top:15px;">
+                  <a href="https://wb-be-lc6x.onrender.com/health"
+                     style="background:#2563eb; color:white; padding:12px 24px; text-decoration:none; border-radius:6px; font-weight:bold; display:inline-block;">
+                     🌍 Verify BE Health Endpoint
+                  </a>
+                </div>
+
+              </div>
+            </div>
+
+      # Step 6: Send Failure Email Notification
+      - name: Send Release Failure Email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: false
+          username: "workbench.portal@gmail.com"
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "❌ [WB_BE] Production Release Deployment Failed"
+          to: workbench.portal@gmail.com
+          from: "workbench.portal@gmail.com"
+          html_body: |
+            <div style="font-family: Arial, sans-serif; background:#f3f4f6; padding:30px;">
+              <div style="max-width:650px; margin:auto; background:#ffffff; border-radius:10px; padding:25px;">
+
+                <div style="text-align:center; margin-bottom:20px;">
+                  <img src="https://res.cloudinary.com/dja3u3qwa/image/upload/v1771704478/logo_new_grbbdt.png" width="150" alt="WorkBench Logo"/>
+                </div>
+
+                <h2 style="color:#dc2626; text-align:center;">❌ Backend Release Deployment Failed</h2>
+                <p>Hello Team,</p>
+                <p>The release deployment to the <strong>release</strong> branch encountered an issue during build or deployment.</p>
+
+                <table style="width:100%; margin-top:15px;">
+                  <tr><td><strong>Release Tag:</strong></td><td>${{ github.event.release.tag_name || 'Manual Release' }}</td></tr>
+                  <tr><td><strong>Target Branch:</strong></td><td><code>release</code></td></tr>
+                  <tr><td><strong>Triggered By:</strong></td><td>${{ github.actor }}</td></tr>
+                </table>
+
+                <br/>
+
+                <div style="text-align:center; margin-top:15px;">
+                  <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                     style="background:#dc2626; color:white; padding:12px 24px; text-decoration:none; border-radius:6px; font-weight:bold; display:inline-block;">
+                     🔎 Inspect GitHub Workflow Logs
+                  </a>
+                </div>
+
+              </div>
+            </div>
